@@ -1,0 +1,6 @@
+[workspace]
+members = [
+	"mysql_async_orm",
+	"mysql_async_orm_proc_macros",
+	"mysql_async_orm_test"
+]
