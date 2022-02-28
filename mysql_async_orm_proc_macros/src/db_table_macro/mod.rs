@@ -4,7 +4,7 @@ use syn::Result;
 
 use crate::CRATE_NAME;
 
-use self::into_db_table::{DbColumn, DbRelation, get_inner_type};
+use self::into_db_table::{DbColumn, DbRelation};
 
 pub mod into_db_table;
 
@@ -105,65 +105,58 @@ pub fn get_push_next_sub(relations: &Vec<DbRelation<'_>>) -> Result<Vec<proc_mac
 	}).collect())
 }
 
-pub fn get_save_update_obj_fn(_: &into_db_table::DbTable) -> Result<proc_macro2::TokenStream> {
-	Ok(quote!(todo!()))
-}
-
-pub fn get_save_insert_obj_fn(db_table: &into_db_table::DbTable) -> Result<proc_macro2::TokenStream> {
+pub fn get_prepare_insert(db_table: &into_db_table::DbTable) -> Result<proc_macro2::TokenStream> {
 	let crate_name = syn::Ident::new(CRATE_NAME, proc_macro2::Span::call_site());
 	let columns_except_pk = db_table.columns_except_pk.iter().filter(|c| !c.readonly).collect::<Vec<_>>();
-	let pk_inner_type = get_inner_type(db_table.pk.rs_type)?;
-	let params: Vec<_> = columns_except_pk.iter().map(|c| {
-		let c = c.rs_name_ident;
-		quote! { self.#c.into() }
-	}).collect();
 	let insert_col_list = columns_except_pk.iter().map(|c| &c.db_name as &str).collect::<Vec<&str>>().join(",");
-	let params_str = (0..columns_except_pk.len()).map(|_| "?").collect::<Vec<&str>>().join(",");
-	let sql_insert = format!("INSERT INTO {} ({}) VALUES ({});", db_table.from.table, insert_col_list, params_str);
-	let relation_insert = db_table.relations.iter().map(|r| {
-		let rs_name = r.rs_name_ident;
-		let rs_type = r.ty;
-		let join_col = &r.join_col;
+	let insert_str_with_fk = format!("INSERT INTO {} ({{}},{}) VALUES (@id_{{}}", db_table.from.table, insert_col_list);
+	let insert_str_without_fk = format!("INSERT INTO {} ({}) VALUES (", db_table.from.table, insert_col_list);
+	let pk_rs_name = db_table.pk.rs_name_ident;
+	let query_push_with_fk = columns_except_pk.iter().map(|col| {
+		let rs_name = col.rs_name_ident;
 		quote! {
-			{
-				#crate_name::lazy_static! {
-					static ref SUB_INS: (::std::string::String, fn(&::std::vec::Vec<#rs_type>, #pk_inner_type) -> ::std::vec::Vec<::std::vec::Vec<#crate_name::mysql_async::Value>>) = <<#rs_type as #crate_name::db_table::DbTable>::DataCollector as #crate_name::db_table::DbTableDataCollector>::get_insert_instr_as_sub(#join_col);
-				}
-				let (sql, iter_parse) = &*SUB_INS;
-				connection.exec_batch(sql, iter_parse(&self.#rs_name, pk)).await?;
-			}
+			query.push(',');
+			query.push_str(&#crate_name::mysql_async::Value::from(&data.#rs_name).as_sql(false));
 		}
 	});
-	Ok(quote! {
-		let params: ::std::vec::Vec<#crate_name::mysql_async::Value> = ::std::vec![#(#params,)*];
-		connection.exec_drop(#sql_insert, params).await?;
-		let pk = connection.last_insert_id().ok_or("")? as #pk_inner_type;
-		
-		#(#relation_insert)*
-		
-		::std::result::Result::Ok(pk)
-	})
-}
-
-pub fn get_fn_get_insert_instr_as_sub(db_table: &into_db_table::DbTable) -> Result<proc_macro2::TokenStream> {
-	let crate_name = syn::Ident::new(CRATE_NAME, proc_macro2::Span::call_site());
-	let columns_except_pk = db_table.columns_except_pk.iter().filter(|c| !c.readonly).collect::<Vec<_>>();
-	let insert_col_list = columns_except_pk.iter().map(|c| &c.db_name as &str).collect::<Vec<&str>>().join(",");
-	let params_str = (0..=columns_except_pk.len()).map(|_| "?").collect::<Vec<&str>>().join(",");
-	let insert_str = format!("INSERT INTO {} ({{}},{}) VALUES ({});", db_table.from.table, insert_col_list, params_str);
-	let pk_rs_name = db_table.pk.rs_name_ident;
-	let params: Vec<_> = columns_except_pk.iter().map(|c| {
-		let c = c.rs_name_ident;
-		quote! { (&data.#c).into() }
-	}).collect();
-	let rs_type = db_table.from.rs_type;
-	Ok(quote! {
-		let insert_str = ::std::format!(#insert_str, fk);
-		fn format_data<K: ::std::convert::Into<#crate_name::mysql_async::Value> + ::std::marker::Copy>(input: &::std::vec::Vec<#rs_type>, fk: K) -> ::std::vec::Vec<::std::vec::Vec<#crate_name::mysql_async::Value>> {
-			input.iter().filter(|v| v.#pk_rs_name.is_none()).map(|data|
-				vec![fk.into(), #(#params,)*]
-			).collect()
+	let query_push_without_fk = columns_except_pk.iter().enumerate().map(|(index, col)| {
+		let comma = if index == 0 { quote!() } else { quote!(query.push(',');) };
+		let rs_name = col.rs_name_ident;
+		quote! {
+			#comma
+			query.push_str(&#crate_name::mysql_async::Value::from(&data.#rs_name).as_sql(false));
 		}
-		(insert_str, format_data::<K>)
+	});
+	let relations: Vec<_> = db_table.relations.iter().map(|r| {
+		let rs_type = r.ty;
+		let rs_name = r.rs_name_ident;
+		let join_col = &r.join_col;
+		quote! {
+			for row in &data.#rs_name {
+				<#rs_type as #crate_name::db_table::DbTable>::prepare_insert(Some(#join_col), row, query, this_id);
+			}
+		}
+	}).collect();
+	Ok(quote! {
+		if data.#pk_rs_name.is_none() {
+			let this_id = this_id + 1;
+			if let Some(fk_db_name) = fk {
+				query.push_str(&::std::format!(#insert_str_with_fk, fk_db_name, this_id - 1));
+				#(#query_push_with_fk)*
+				query.push_str(");SET @id_");
+				query.push_str(&format!("{}", this_id));
+				query.push_str(" = LAST_INSERT_ID();");
+				
+				#(#relations)*
+			} else {
+				query.push_str(#insert_str_without_fk);
+				#(#query_push_without_fk)*
+				query.push_str(");SET @id_");
+				query.push_str(&format!("{}", this_id));
+				query.push_str(" = LAST_INSERT_ID();");
+				
+				#(#relations)*
+			}
+		}
 	})
 }

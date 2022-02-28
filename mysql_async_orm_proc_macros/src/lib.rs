@@ -33,9 +33,7 @@ fn db_table_macro(input: &syn::DeriveInput) -> Result<proc_macro2::TokenStream> 
 	let partial_data_build = db_table_macro::get_partial_data_build(&db_table.columns_except_pk, &db_table.relations)?;
 	let push_next_sub = db_table_macro::get_push_next_sub(&db_table.relations)?;
 	let mod_name = generate_unique_ident("__db_rel");
-	let save_update_obj_fn = db_table_macro::get_save_update_obj_fn(&db_table)?;
-	let save_insert_obj_fn = db_table_macro::get_save_insert_obj_fn(&db_table)?;
-	let fn_get_insert_instr_as_sub = db_table_macro::get_fn_get_insert_instr_as_sub(&db_table)?;
+	let prepare_insert = db_table_macro::get_prepare_insert(&db_table)?;
 	
 	let sql_names = [pk_db_string.clone()].into_iter().chain(db_table.columns_except_pk.iter().map(|f| {
 		let default_column_name = f.rs_name_ident;
@@ -134,6 +132,15 @@ fn db_table_macro(input: &syn::DeriveInput) -> Result<proc_macro2::TokenStream> 
 	let res = quote! {
 		impl #crate_name::db_table::DbTable for #name {
 			type DataCollector = #mod_name::DataCollector;
+			fn prepare_insert(fk: ::std::option::Option<&::std::primitive::str>, data: &Self, query: &mut ::std::string::String, this_id: ::std::primitive::usize) {
+				#prepare_insert
+			}
+			fn prepare_update(fk: ::std::option::Option<&::std::primitive::str>, data: &Self, query: &mut ::std::string::String, this_id: ::std::primitive::usize) {
+				todo!()
+			}
+			fn prepare_delete(fk: ::std::option::Option<&::std::primitive::str>, data: &Self, query: &mut ::std::string::String, this_id: ::std::primitive::usize) {
+				todo!()
+			}
 		}
 		impl #name {
 			fn vec_from_rows(mut rows: Vec<#crate_name::mysql_async::Row>) -> ::std::vec::Vec<Self> {
@@ -144,7 +151,6 @@ fn db_table_macro(input: &syn::DeriveInput) -> Result<proc_macro2::TokenStream> 
 				#crate_name::db_table::DbTableDataCollector::build(collector)
 			}
 			async fn get_by_pk(pk: #pk_inner_type, connection: &mut #crate_name::db_connection::DbConnection) -> ::std::option::Option<Self> {
-				use #crate_name::mysql_async::prelude::*;
 				#crate_name::lazy_static! {
 					static ref SQL: ::std::string::String = {
 						let (_, _, order_by, sql) = <<#name as #crate_name::db_table::DbTable>::DataCollector as #crate_name::db_table::DbTableDataCollector>::sql();
@@ -163,13 +169,39 @@ fn db_table_macro(input: &syn::DeriveInput) -> Result<proc_macro2::TokenStream> 
 				let mut data = data.drain(..);
 				data.next()
 			}
-			async fn save_update(self, connection: &mut #crate_name::db_connection::DbConnection) -> ::std::result::Result<(), #crate_name::db_connection::DbError> {
-				use #crate_name::mysql_async::prelude::*;
-				#save_update_obj_fn
+			async fn exec_update(&self, connection: &mut #crate_name::db_connection::DbConnection) -> ::std::result::Result<(), #crate_name::db_connection::DbError> {
+				if self.#pk_name_ident.is_some() {
+					let mut query = String::new();
+					<Self as #crate_name::db_table::DbTable>::prepare_update(::std::option::Option::None, self, &mut query, 0);
+					connection.query_drop(query).await
+				} else {
+					::std::result::Result::Err(#crate_name::db_connection::DbError::Other(::std::borrow::Cow::Borrowed("Pk must be Some")))
+				}
 			}
-			async fn save_insert(self, connection: &mut #crate_name::db_connection::DbConnection) -> ::std::result::Result<#pk_inner_type, #crate_name::db_connection::DbError> {
-				use #crate_name::mysql_async::prelude::*;
-				#save_insert_obj_fn
+			async fn exec_delete(&self, connection: &mut #crate_name::db_connection::DbConnection) -> ::std::result::Result<(), #crate_name::db_connection::DbError> {
+				if self.#pk_name_ident.is_some() {
+					let mut query = String::new();
+					<Self as #crate_name::db_table::DbTable>::prepare_delete(::std::option::Option::None, self, &mut query, 0);
+					connection.query_drop(query).await
+				} else {
+					::std::result::Result::Err(#crate_name::db_connection::DbError::Other(::std::borrow::Cow::Borrowed("Pk must be Some")))
+				}
+			}
+			async fn exec_insert(&self, connection: &mut #crate_name::db_connection::DbConnection) -> ::std::result::Result<#pk_inner_type, #crate_name::db_connection::DbError> {
+				if self.#pk_name_ident.is_none() {
+					let mut query = String::new();
+					<Self as #crate_name::db_table::DbTable>::prepare_insert(::std::option::Option::None, self, &mut query, 0);
+					query.push_str("SELECT @id_1;");
+					let mut res = connection.query_iter(query).await?;
+					let mut last_row = None;
+					while !res.is_empty() {
+						res.for_each(|row| last_row = Some(row)).await?;
+					}
+					let mut last_row = last_row.ok_or(#crate_name::db_connection::DbError::Other(::std::borrow::Cow::Borrowed("Unknown error")))?;
+					last_row.take(0).ok_or(#crate_name::db_connection::DbError::Other(::std::borrow::Cow::Borrowed("Unknown error")))
+				} else {
+					::std::result::Result::Err(#crate_name::db_connection::DbError::Other(::std::borrow::Cow::Borrowed("Pk must be None")))
+				}
 			}
 		}
 		mod #mod_name {
@@ -210,7 +242,7 @@ fn db_table_macro(input: &syn::DeriveInput) -> Result<proc_macro2::TokenStream> 
 				type Item = #name;
 				const SIZE: usize = #db_table_col_count;
 				
-				fn sql() -> (&'static str, String, Vec<usize>, Vec<(String, String)>) { //(table_name, null_set, order_by, VEC<(select, joins)>)
+				fn sql() -> (&'static str, String, Vec<usize>, Vec<(String, String)>) {
 					#sql_fn
 				}
 				
@@ -241,10 +273,6 @@ fn db_table_macro(input: &syn::DeriveInput) -> Result<proc_macro2::TokenStream> 
 						self.partial_result.push(current.build());
 					}
 					self.partial_result
-				}
-				
-				fn get_insert_instr_as_sub<K: ::std::convert::Into<#crate_name::mysql_async::Value> + ::std::marker::Copy>(fk: &::std::primitive::str) -> (::std::string::String, fn(&::std::vec::Vec<Self::Item>, K) -> ::std::vec::Vec<::std::vec::Vec<#crate_name::mysql_async::Value>>) {
-					#fn_get_insert_instr_as_sub
 				}
 				
 			}
