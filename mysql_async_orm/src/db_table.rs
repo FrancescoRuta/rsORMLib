@@ -1,10 +1,5 @@
-use crate::db_connection::{DbConnection, DbError};
-
-pub trait DbTable<K> where Self: Sized {
+pub trait DbTable where Self: Sized {
 	type DataCollector: DbTableDataCollector;
-	fn vec_from_rows(rows: Vec<mysql_async::Row>) -> Vec<Self>;
-	fn get_by_pk(pk: K, connection: &mut DbConnection) -> Option<Self>;
-	fn save(&self, connection: &mut DbConnection) -> Result<(), DbError>;
 }
 
 pub trait DbTableDataCollector where Self: Sized {
@@ -14,4 +9,5 @@ pub trait DbTableDataCollector where Self: Sized {
 	fn new(offset: usize) -> Self;
 	fn push_next(&mut self, next_row: &mut mysql_async::Row) -> Option<()>;
 	fn build(self) -> Vec<Self::Item>;
+	fn get_insert_instr_as_sub<K: Into<mysql_async::Value> + Copy>(fk: &str) -> (String, fn(&Vec<Self::Item>, K) -> Vec<Vec<mysql_async::Value>>);
 }

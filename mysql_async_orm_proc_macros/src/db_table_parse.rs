@@ -1,29 +1,24 @@
 use std::collections::HashMap;
 use syn::parse::Parse;
 
-pub struct FromAttributes {
+#[derive(Clone)]
+pub struct FromAttribute {
 	pub attr: Option<String>,
 	pub named_arrs: HashMap<String, String>,
 }
+
+pub struct RelationAttribute {
+	pub fk: String,
+}
+
 #[allow(dead_code)]
 pub struct NamedAttribute {
 	pub name: syn::Ident,
 	pub eq_token: syn::Token![=],
 	pub value: syn::LitStr,
 }
-pub struct TParse3<T0, T1, T2>(pub T0, pub T1, pub T2);
 
-
-impl<T0: Parse, T1: Parse, T2: Parse> Parse for TParse3<T0, T1, T2> {
-	fn parse(input: syn::parse::ParseStream) -> syn::Result<Self> {
-		let content;
-		let _ = syn::parenthesized!(content in input);
-		let input = &content;
-		Ok(TParse3(input.parse()?, input.parse()?, input.parse()?))
-	}
-}
-
-impl Parse for FromAttributes {
+impl Parse for FromAttribute {
 	fn parse(input: syn::parse::ParseStream) -> syn::Result<Self> {
 		let content;
 		let _ = syn::parenthesized!(content in input);
@@ -43,7 +38,7 @@ impl Parse for FromAttributes {
 		for attr in named_arrs_punct {
 			named_arrs.insert(attr.name.to_string(), attr.value.value());
 		}
-		Ok(FromAttributes {
+		Ok(FromAttribute {
 			attr,
 			named_arrs,
 		})
@@ -56,6 +51,18 @@ impl Parse for NamedAttribute {
 			name: input.parse()?,
 			eq_token: input.parse()?,
 			value: input.parse()?,
+		})
+	}
+}
+
+
+impl Parse for RelationAttribute {
+	fn parse(input: syn::parse::ParseStream) -> syn::Result<Self> {
+		let content;
+		let _ = syn::parenthesized!(content in input);
+		let fk: syn::LitStr = content.parse()?;
+		Ok(RelationAttribute {
+			fk: fk.value(),
 		})
 	}
 }

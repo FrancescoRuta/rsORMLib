@@ -1,5 +1,5 @@
 use quote::quote;
-use db_table_parse::*;
+use syn::Result;
 
 mod db_table_parse;
 mod db_table_macro;
@@ -13,120 +13,34 @@ fn generate_unique_ident(prefix: &str) -> syn::Ident {
     syn::Ident::new(&ident, proc_macro2::Span::call_site())
 }
 
-#[proc_macro_derive(DbTable, attributes(from, pk, relation))]
-pub fn db_table(input: proc_macro::TokenStream) -> proc_macro::TokenStream {
+fn db_table_macro(input: &syn::DeriveInput) -> Result<proc_macro2::TokenStream> {
 	let crate_name = syn::Ident::new(CRATE_NAME, proc_macro2::Span::call_site());
-	let input: syn::DeriveInput = syn::parse(input).unwrap();
-	let name = input.ident;
-	let fields = if let syn::Data::Struct(data) = input.data {
-		match data.fields {
-			syn::Fields::Unit => {
-				panic!("DeriveInput can't be a unit struct");
-			},
-			syn::Fields::Named(fields) => {
-				fields
-			},
-			syn::Fields::Unnamed(_) => {
-				panic!("DeriveInput can't be a tuple struct");
-			}
-		}
-	} else {
-		panic!("DeriveInput must be a struct");
-	};
-	let struct_from = input.attrs.iter().find(|a| a.path.segments.iter().next().map_or(false, |f| f.ident.to_string() == "from"));
-	let struct_from = struct_from.expect("from attribute must be specified");
-	let mut struct_from: FromAttributes = syn::parse(struct_from.tokens.clone().into()).expect("struct_from: FromAttributes");
-	let from = struct_from.attr.expect("A db table must have a from string");
-	let table = if let Some(table) = struct_from.named_arrs.remove("table") {
-		table
-	} else {
-		from.clone()
-	};
-	let joins = if let Some(joins) = struct_from.named_arrs.remove("joins") {
-		format!(" {}", joins)
-	} else {
-		"".to_string()
-	};
-	let pk: Vec<_> = fields.named.iter().filter_map(|f| f.attrs.iter().find(|a| a.path.segments.iter().next().map_or(false, |a| a.ident.to_string() == "pk")).map(|p| (f, p))).collect();
-	let (fields_except_pk, relations) = {
-		let all_except_pk = fields.named.iter().filter(|f| !f.attrs.iter().any(|a| a.path.segments.iter().next().map_or(false, |a| a.ident.to_string() == "pk")));
-		let fields_except_pk: Vec<_> = all_except_pk.clone().filter(|f| !f.attrs.iter().any(|a| a.path.segments.iter().next().map_or(false, |a| a.ident.to_string() == "relation"))).collect();
-		let relations: Vec<_> = all_except_pk.filter_map(|f| f.attrs.iter().find(|a| a.path.segments.iter().next().map_or(false, |a| a.ident.to_string() == "relation")).map(|r| (f, syn::parse::<TParse3<syn::Ident, syn::Token![,], syn::LitStr>>(r.tokens.clone().into()).expect("REL")))).collect();
-		(fields_except_pk, relations)
-	};
-	let size = fields_except_pk.len() + 1;
-	if pk.len() > 1 {
-		panic!("There must be only one pk");
-	} else if pk.len() == 0 {
-		panic!("There must be one pk");
-	}
-	let (pk, pk_attribute) = pk[0];
-	let pk_type = &pk.ty;
-	let pk_name = &pk.ident;
-	let pk = quote! { #pk_name: #pk_type };
-	let pk_sql_name = if pk_attribute.tokens.is_empty() {
-		format!("{}.{}", table, pk_name.as_ref().unwrap())
-	} else {
-		let s: syn::LitStr = syn::parse(pk_attribute.tokens.clone().into()).unwrap();
-		format!("{}.{}", table, s.value())
-	};
-	let partial_data_fields = fields_except_pk.iter().map(|f| {
-		let f_name = f.ident.as_ref().unwrap();
-		let f_type = &f.ty;
-		quote! { #f_name: #f_type }
-	}).chain(
-		relations.iter().map(|(f, TParse3(ty, _, _))| {
-			let f_name = f.ident.as_ref().unwrap();
-			quote! { #f_name: <#ty as #crate_name::db_table::DbTable>::DataCollector }
-		})
-	);
-	let partial_data_init_collectors = relations.iter().map(|(f, TParse3(ty, _, _))| {
-		let f_name = f.ident.as_ref().unwrap();
-		quote! {
-			let mut #f_name = <#ty as #crate_name::db_table::DbTable>::DataCollector::new(offset_sub);
-			#f_name.push_next(row);
-			let offset_sub = offset_sub + <#ty as #crate_name::db_table::DbTable>::DataCollector::SIZE;
-		}
-	});
-	let partial_data_init = fields_except_pk.iter().enumerate().map(|(index, f)| {
-		let f_name = f.ident.as_ref().unwrap();
-		let index = index + 1;
-		quote! { #f_name: row.take_opt(offset + #index)?.ok()? }
-	}).chain(
-		relations.iter().map(|(f, _)| {
-			let f_name = f.ident.as_ref().unwrap();
-			quote! { #f_name }
-		})
-	);
-	let partial_data_destruct = fields_except_pk.iter().map(|f| {
-		let f_name = f.ident.as_ref().unwrap();
-		quote! { #f_name }
-	}).chain(
-		relations.iter().map(|(f, _)| {
-			let f_name = f.ident.as_ref().unwrap();
-			quote! { #f_name }
-		})
-	);
-	let partial_data_build = fields_except_pk.iter().map(|f| {
-		let f_name = f.ident.as_ref().unwrap();
-		quote! { #f_name }
-	}).chain(
-		relations.iter().map(|(f, _)| {
-			let f_name = f.ident.as_ref().unwrap();
-			quote! { #f_name: #f_name.build() }
-		})
-	);
-	let push_next_sub = relations.iter().map(|(f, _)| {
-		let f_name = f.ident.as_ref().unwrap();
-		quote! {
-			current.#f_name.push_next(next_row);
-		}
-	});
+	let crate_name = quote! { ::#crate_name };
+	let name = &input.ident;
+	let fields = db_table_macro::get_struct_fields(input)?;
+	let struct_attributes = db_table_macro::get_attributes(input.attrs.iter());
+	
+	let db_table = db_table_macro::into_db_table::get_db_table(input, &struct_attributes, fields)?;
+	let db_table_col_count = db_table.columns_except_pk.len() + 1;
+	let pk_type = db_table.pk.rs_type;
+	let pk_inner_type = db_table_macro::into_db_table::get_inner_type(pk_type)?;
+	let pk_name_ident = db_table.pk.rs_name_ident;
+	let pk_db_string = format!("{}.{}", db_table.from.table, db_table.pk.db_name);
+	let partial_data_fields = db_table_macro::get_partial_data_fields(&db_table.columns_except_pk, &db_table.relations)?;
+	let partial_data_init_collectors = db_table_macro::get_partial_data_init_collectors(&db_table.relations)?;
+	let partial_data_init = db_table_macro::get_partial_data_init(&db_table.columns_except_pk, &db_table.relations)?;
+	let partial_data_destruct = db_table_macro::get_partial_data_destruct(&db_table.columns_except_pk, &db_table.relations)?;
+	let partial_data_build = db_table_macro::get_partial_data_build(&db_table.columns_except_pk, &db_table.relations)?;
+	let push_next_sub = db_table_macro::get_push_next_sub(&db_table.relations)?;
 	let mod_name = generate_unique_ident("__db_rel");
-	let sql_names = [pk_sql_name.clone()].into_iter().chain(fields_except_pk.iter().map(|f| {
-		let default_column_name = f.ident.as_ref().unwrap();
-		if let Some(from) = f.attrs.iter().find(|a|  a.path.segments.iter().next().map_or(false, |a| a.ident.to_string() == "from")) {
-			let mut from: FromAttributes = syn::parse(from.tokens.clone().into()).unwrap();
+	let save_update_obj_fn = db_table_macro::get_save_update_obj_fn(&db_table)?;
+	let save_insert_obj_fn = db_table_macro::get_save_insert_obj_fn(&db_table)?;
+	let fn_get_insert_instr_as_sub = db_table_macro::get_fn_get_insert_instr_as_sub(&db_table)?;
+	
+	let sql_names = [pk_db_string.clone()].into_iter().chain(db_table.columns_except_pk.iter().map(|f| {
+		let default_column_name = f.rs_name_ident;
+		if let Some(from) = &f.from_attribute {
+			let mut from = from.clone();
 			let column_name = if let Some(column_name) = from.named_arrs.remove("column") {
 				column_name
 			} else if let Some(column_name) = from.attr {
@@ -137,17 +51,19 @@ pub fn db_table(input: proc_macro::TokenStream) -> proc_macro::TokenStream {
 			let table = if let Some(table) = from.named_arrs.get("table") {
 				table
 			} else {
-				&table
+				&db_table.from.table
 			};
 			format!("{}.{}", table, column_name)
 		} else {
-			format!("{}.{}", table, default_column_name)
+			format!("{}.{}", db_table.from.table, default_column_name)
 		}
 	}));
-	
-	let null_format_string = (0..(fields_except_pk.len() + 1)).map(|_| "NULL").collect::<Vec<&'static str>>().join(",");
+	let null_format_string = (0..(db_table.columns_except_pk.len() + 1)).map(|_| "NULL").collect::<Vec<&'static str>>().join(",");
+	let joins = &db_table.from.joins;
+	let table = &db_table.from.table;
+	let from = &db_table.from.from;
 	let select_format_string = sql_names.collect::<Vec<String>>().join(",");
-	let sql_fn = if relations.len() == 0 {
+	let sql_fn = if db_table.relations.len() == 0 {
 		quote! {
 			(#table, #null_format_string.to_string(), vec![0], vec![(#select_format_string.to_string(), #joins.to_string())])
 		}
@@ -161,12 +77,14 @@ pub fn db_table(input: proc_macro::TokenStream) -> proc_macro::TokenStream {
 		
 		let mut null_format_string = null_format_string;
 		let mut select_format_string = select_format_string;
-		null_format_string.push_str(&(0..relations.len()).map(|_| ",{}").collect::<Vec<&'static str>>().join(""));
-		select_format_string.push_str(&(0..relations.len()).map(|_| ",{}").collect::<Vec<&'static str>>().join(""));
+		null_format_string.push_str(&(0..db_table.relations.len()).map(|_| ",{}").collect::<Vec<&'static str>>().join(""));
+		select_format_string.push_str(&(0..db_table.relations.len()).map(|_| ",{}").collect::<Vec<&'static str>>().join(""));
 		let null_format_string = null_format_string;
 		let select_format_string = select_format_string;
 		
-		for (index, (_, TParse3(ty, _, fk))) in relations.iter().enumerate() {
+		for (index, r) in db_table.relations.iter().enumerate() {
+			let ty = &r.ty;
+			let fk = &r.join_col;
 			let f_name = syn::Ident::new(&format!("t{}", index), proc_macro2::Span::call_site());
 			
 			t_len.push(quote! { #f_name.3.len() });
@@ -177,8 +95,8 @@ pub fn db_table(input: proc_macro::TokenStream) -> proc_macro::TokenStream {
 			
 			null_format_args.push(quote! { #f_name.1 });
 			
-			let from_format_string = format!("{}{{}} LEFT JOIN {{}} ON {}={{}}.{}{{}}", from, pk_sql_name, fk.value());
-			let from_format_args = (0..relations.len())
+			let from_format_string = format!("{}{{}} LEFT JOIN {{}} ON {}={{}}.{}{{}}", from, pk_db_string, fk);
+			let from_format_args = (0..db_table.relations.len())
 				.map(|i|
 					if i == index {
 						quote! {select}
@@ -207,21 +125,51 @@ pub fn db_table(input: proc_macro::TokenStream) -> proc_macro::TokenStream {
 			let mut o = Vec::with_capacity(1 #(#o_len)*);
 			#(#v_ext)*
 			o.push(0);
-			let current_offset = #size;
+			let current_offset = #db_table_col_count;
 			#(#o_ext)*
 			(#table, format!(#null_format_string, #(#null_format_args,)*), o, v)
 		}
 	};
 	
-	let result = quote! {
+	let res = quote! {
 		impl #crate_name::db_table::DbTable for #name {
 			type DataCollector = #mod_name::DataCollector;
-			fn vec_from_rows(mut rows: Vec<#crate_name::mysql_async::Row>) -> Vec<Self> {
-				let mut collector = <Self::DataCollector as #crate_name::db_table::DbTableDataCollector>::new(0);
+		}
+		impl #name {
+			fn vec_from_rows(mut rows: Vec<#crate_name::mysql_async::Row>) -> ::std::vec::Vec<Self> {
+				let mut collector = <<Self as #crate_name::db_table::DbTable>::DataCollector as #crate_name::db_table::DbTableDataCollector>::new(0);
 				for row in rows.iter_mut() {
 					#crate_name::db_table::DbTableDataCollector::push_next(&mut collector, row);
 				}
 				#crate_name::db_table::DbTableDataCollector::build(collector)
+			}
+			async fn get_by_pk(pk: #pk_inner_type, connection: &mut #crate_name::db_connection::DbConnection) -> ::std::option::Option<Self> {
+				use #crate_name::mysql_async::prelude::*;
+				#crate_name::lazy_static! {
+					static ref SQL: ::std::string::String = {
+						let (_, _, order_by, sql) = <<#name as #crate_name::db_table::DbTable>::DataCollector as #crate_name::db_table::DbTableDataCollector>::sql();
+						let sql = sql.iter().map(|(select, from)| format!(
+							"SELECT {} FROM {} WHERE clienti.id=?",
+							select, from
+						)).collect::<::std::vec::Vec<_>>().join(" UNION ALL ");
+						let sql = std::format!("{} ORDER BY {};", sql, order_by.iter().map(|i| (i + 1).to_string()).collect::<::std::vec::Vec<_>>().join(","));
+						sql
+					};
+					static ref PARAM_COUNT: usize = <<#name as #crate_name::db_table::DbTable>::DataCollector as #crate_name::db_table::DbTableDataCollector>::sql().3.len();
+				}
+				let params: ::std::vec::Vec<_> = (0..*PARAM_COUNT).map(|_| pk).collect();
+				let sql: &str = &*SQL;
+				let mut data = Self::vec_from_rows(connection.exec(sql, params).await.ok()?);
+				let mut data = data.drain(..);
+				data.next()
+			}
+			async fn save_update(self, connection: &mut #crate_name::db_connection::DbConnection) -> ::std::result::Result<(), #crate_name::db_connection::DbError> {
+				use #crate_name::mysql_async::prelude::*;
+				#save_update_obj_fn
+			}
+			async fn save_insert(self, connection: &mut #crate_name::db_connection::DbConnection) -> ::std::result::Result<#pk_inner_type, #crate_name::db_connection::DbError> {
+				use #crate_name::mysql_async::prelude::*;
+				#save_insert_obj_fn
 			}
 		}
 		mod #mod_name {
@@ -230,24 +178,24 @@ pub fn db_table(input: proc_macro::TokenStream) -> proc_macro::TokenStream {
 			use #crate_name::mysql_async::Row;
 			
 			struct PartialData {
-				#pk,
+				#pk_name_ident: #pk_type,
 				#(#partial_data_fields,)*
 			}
 		
 			impl PartialData {
 				fn new(pk: #pk_type, offset: usize, row: &mut Row) -> Option<Self> {
-					let offset_sub = offset + <#name as #crate_name::db_table::DbTable>::DataCollector::SIZE;
+					let offset_sub = offset + <<#name as #crate_name::db_table::DbTable>::DataCollector as #crate_name::db_table::DbTableDataCollector>::SIZE;
 					#(#partial_data_init_collectors)*
 					Some(PartialData {
-						#pk_name: pk,
+						#pk_name_ident: pk,
 						#(#partial_data_init,)*
 					})
 				}
 		
 				fn build(self) -> #name {
-					let Self { #pk_name, #(#partial_data_destruct,)* } = self;
+					let Self { #pk_name_ident, #(#partial_data_destruct,)* } = self;
 					#name {
-						#pk_name,
+						#pk_name_ident,
 						#(#partial_data_build,)*
 					}
 				}
@@ -260,7 +208,7 @@ pub fn db_table(input: proc_macro::TokenStream) -> proc_macro::TokenStream {
 			}
 			impl #crate_name::db_table::DbTableDataCollector for DataCollector {
 				type Item = #name;
-				const SIZE: usize = #size;
+				const SIZE: usize = #db_table_col_count;
 				
 				fn sql() -> (&'static str, String, Vec<usize>, Vec<(String, String)>) { //(table_name, null_set, order_by, VEC<(select, joins)>)
 					#sql_fn
@@ -275,15 +223,15 @@ pub fn db_table(input: proc_macro::TokenStream) -> proc_macro::TokenStream {
 				}
 		
 				fn push_next(&mut self, next_row: &mut Row) -> Option<()> {
-					let #pk_name = next_row.take_opt(self.offset)?.ok()?;
+					let #pk_name_ident = next_row.take_opt(self.offset)?.ok();
 					if let Some(current) = &mut self.current {
-						if #pk_name == current.#pk_name {
+						if #pk_name_ident == current.#pk_name_ident {
 							#(#push_next_sub)*
 						} else {
-							self.partial_result.push(std::mem::replace(current, PartialData::new(#pk_name, self.offset, next_row)?).build());
+							self.partial_result.push(std::mem::replace(current, PartialData::new(#pk_name_ident, self.offset, next_row)?).build());
 						}
 					} else {
-						self.current = PartialData::new(#pk_name, self.offset, next_row);
+						self.current = PartialData::new(#pk_name_ident, self.offset, next_row);
 					}
 					Some(())
 				}
@@ -294,9 +242,23 @@ pub fn db_table(input: proc_macro::TokenStream) -> proc_macro::TokenStream {
 					}
 					self.partial_result
 				}
+				
+				fn get_insert_instr_as_sub<K: ::std::convert::Into<#crate_name::mysql_async::Value> + ::std::marker::Copy>(fk: &::std::primitive::str) -> (::std::string::String, fn(&::std::vec::Vec<Self::Item>, K) -> ::std::vec::Vec<::std::vec::Vec<#crate_name::mysql_async::Value>>) {
+					#fn_get_insert_instr_as_sub
+				}
+				
 			}
 		}
 		
 	};
-	result.into()
+	
+	//println!("{}", res.to_string());
+	
+	Ok(res)
+}
+
+#[proc_macro_derive(DbTable, attributes(from, pk, relation, readonly))]
+pub fn db_table(input: proc_macro::TokenStream) -> proc_macro::TokenStream {
+	let input = syn::parse_macro_input!(input as syn::DeriveInput);
+	db_table_macro(&input).unwrap_or_else(syn::Error::into_compile_error).into()
 }
