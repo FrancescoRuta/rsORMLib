@@ -34,6 +34,8 @@ fn db_table_macro(input: &syn::DeriveInput) -> Result<proc_macro2::TokenStream> 
 	let push_next_sub = db_table_macro::get_push_next_sub(&db_table.relations)?;
 	let mod_name = generate_unique_ident("__db_rel");
 	let prepare_insert = db_table_macro::get_prepare_insert(&db_table)?;
+	let prepare_update = db_table_macro::get_prepare_update(&db_table)?;
+	let prepare_delete = db_table_macro::get_prepare_delete(&db_table)?;
 	
 	let sql_names = [pk_db_string.clone()].into_iter().chain(db_table.columns_except_pk.iter().map(|f| {
 		let default_column_name = f.rs_name_ident;
@@ -135,11 +137,11 @@ fn db_table_macro(input: &syn::DeriveInput) -> Result<proc_macro2::TokenStream> 
 			fn prepare_insert(fk: ::std::option::Option<&::std::primitive::str>, data: &Self, query: &mut ::std::string::String, this_id: ::std::primitive::usize) {
 				#prepare_insert
 			}
-			fn prepare_update(fk: ::std::option::Option<&::std::primitive::str>, data: &Self, query: &mut ::std::string::String, this_id: ::std::primitive::usize) {
-				todo!()
+			fn prepare_update(fk: ::std::option::Option<&::std::primitive::str>, new_data: &Self, old_data: &Self, query: &mut ::std::string::String, this_id: ::std::primitive::usize) {
+				#prepare_update
 			}
 			fn prepare_delete(fk: ::std::option::Option<&::std::primitive::str>, data: &Self, query: &mut ::std::string::String, this_id: ::std::primitive::usize) {
-				todo!()
+				#prepare_delete
 			}
 		}
 		impl #name {
@@ -169,23 +171,24 @@ fn db_table_macro(input: &syn::DeriveInput) -> Result<proc_macro2::TokenStream> 
 				let mut data = data.drain(..);
 				data.next()
 			}
-			async fn exec_update(&self, connection: &mut #crate_name::db_connection::DbConnection) -> ::std::result::Result<(), #crate_name::db_connection::DbError> {
-				if self.#pk_name_ident.is_some() {
+			async fn exec_update(&self, connection: &mut #crate_name::db_connection::DbConnection) -> ::std::result::Result<Self, #crate_name::db_connection::DbError> {
+				if let Some(pk) = &self.#pk_name_ident {
+					let old_value = Self::get_by_pk(*pk, connection).await.ok_or(#crate_name::db_connection::DbError::Other(::std::borrow::Cow::Borrowed("Not found")))?;
 					let mut query = String::new();
-					<Self as #crate_name::db_table::DbTable>::prepare_update(::std::option::Option::None, self, &mut query, 0);
-					connection.query_drop(query).await
+					<Self as #crate_name::db_table::DbTable>::prepare_update(::std::option::Option::None, self, &old_value, &mut query, 0);
+					connection.query_drop(query).await?;
+					Ok(old_value)
 				} else {
 					::std::result::Result::Err(#crate_name::db_connection::DbError::Other(::std::borrow::Cow::Borrowed("Pk must be Some")))
 				}
 			}
-			async fn exec_delete(&self, connection: &mut #crate_name::db_connection::DbConnection) -> ::std::result::Result<(), #crate_name::db_connection::DbError> {
-				if self.#pk_name_ident.is_some() {
-					let mut query = String::new();
-					<Self as #crate_name::db_table::DbTable>::prepare_delete(::std::option::Option::None, self, &mut query, 0);
-					connection.query_drop(query).await
-				} else {
-					::std::result::Result::Err(#crate_name::db_connection::DbError::Other(::std::borrow::Cow::Borrowed("Pk must be Some")))
-				}
+			//TODO: remove `exec_delete` function
+			async fn exec_delete(#pk_name_ident: #pk_inner_type, connection: &mut #crate_name::db_connection::DbConnection) -> ::std::result::Result<Self, #crate_name::db_connection::DbError> {
+				let old_value = Self::get_by_pk(#pk_name_ident, connection).await.ok_or(#crate_name::db_connection::DbError::Other(::std::borrow::Cow::Borrowed("Not found")))?;
+				let mut query = String::new();
+				<Self as #crate_name::db_table::DbTable>::prepare_delete(::std::option::Option::None, &old_value, &mut query, 0);
+				connection.query_drop(query).await?;
+				Ok(old_value)
 			}
 			async fn exec_insert(&self, connection: &mut #crate_name::db_connection::DbConnection) -> ::std::result::Result<#pk_inner_type, #crate_name::db_connection::DbError> {
 				if self.#pk_name_ident.is_none() {

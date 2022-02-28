@@ -182,4 +182,6 @@ async fn main() {
 	let cliente = Cliente::get_by_pk(id, &mut conn).await.unwrap();
 	println!("{:#?}", cliente);
 	
+	Cliente::exec_delete(id, &mut conn).await.unwrap();
+	
 }

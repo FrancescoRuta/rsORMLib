@@ -1,7 +1,7 @@
 pub trait DbTable where Self: Sized {
 	type DataCollector: DbTableDataCollector;
 	fn prepare_insert(fk: Option<&str>, data: &Self, query: &mut String, this_id: usize);
-	fn prepare_update(fk: Option<&str>, data: &Self, query: &mut String, this_id: usize);
+	fn prepare_update(fk: Option<&str>, new_data: &Self, old_data: &Self, query: &mut String, this_id: usize);
 	fn prepare_delete(fk: Option<&str>, data: &Self, query: &mut String, this_id: usize);
 }
 

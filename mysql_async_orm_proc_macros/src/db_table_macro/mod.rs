@@ -160,3 +160,41 @@ pub fn get_prepare_insert(db_table: &into_db_table::DbTable) -> Result<proc_macr
 		}
 	})
 }
+
+pub fn get_prepare_delete(db_table: &into_db_table::DbTable) -> Result<proc_macro2::TokenStream> {
+	let crate_name = syn::Ident::new(CRATE_NAME, proc_macro2::Span::call_site());
+	let delete_str_with_fk = format!("DELETE FROM {} WHERE {{}}=@id_{{}} AND {}=@id_{{}};", db_table.from.table, db_table.pk.db_name);
+	let delete_str_without_fk = format!("DELETE FROM {} WHERE {}=@id_{{}};", db_table.from.table, db_table.pk.db_name);
+	let pk_rs_name = db_table.pk.rs_name_ident;
+	let relations: Vec<_> = db_table.relations.iter().map(|r| {
+		let rs_type = r.ty;
+		let rs_name = r.rs_name_ident;
+		let join_col = &r.join_col;
+		quote! {
+			for row in &data.#rs_name {
+				<#rs_type as #crate_name::db_table::DbTable>::prepare_delete(Some(#join_col), row, query, this_id);
+			}
+		}
+	}).collect();
+	Ok(quote! {
+		if let Some(pk) = data.#pk_rs_name {
+			let this_id = this_id + 1;
+			if let Some(fk_db_name) = fk {
+				query.push_str(&::std::format!("SET @id_{}={};", this_id, pk));
+				#(#relations)*
+				query.push_str(&::std::format!(#delete_str_with_fk, fk_db_name, this_id - 1, this_id));
+			} else {
+				query.push_str(&::std::format!("SET @id_{}={};", this_id, pk));
+				#(#relations)*
+				query.push_str(&::std::format!(#delete_str_without_fk, this_id));
+			}
+		}
+	})
+}
+
+
+pub fn get_prepare_update(_: &into_db_table::DbTable) -> Result<proc_macro2::TokenStream> {
+	Ok(quote! {
+		todo!()
+	})
+}
