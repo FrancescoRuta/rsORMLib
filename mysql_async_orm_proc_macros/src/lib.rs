@@ -134,6 +134,7 @@ fn db_table_macro(input: &syn::DeriveInput) -> Result<proc_macro2::TokenStream> 
 	let res = quote! {
 		impl #crate_name::db_table::DbTable for #name {
 			type DataCollector = #mod_name::DataCollector;
+			type PrimaryKey = #pk_inner_type;
 			fn prepare_insert(fk: ::std::option::Option<&::std::primitive::str>, data: &Self, query: &mut ::std::string::String, this_id: ::std::primitive::usize) {
 				#prepare_insert
 			}
@@ -142,6 +143,9 @@ fn db_table_macro(input: &syn::DeriveInput) -> Result<proc_macro2::TokenStream> 
 			}
 			fn prepare_delete(fk: ::std::option::Option<&::std::primitive::str>, data: &Self, query: &mut ::std::string::String, this_id: ::std::primitive::usize) {
 				#prepare_delete
+			}
+			fn get_pk(&self) -> ::std::option::Option<Self::PrimaryKey> {
+				self.#pk_name_ident
 			}
 		}
 		impl #name {
@@ -182,7 +186,6 @@ fn db_table_macro(input: &syn::DeriveInput) -> Result<proc_macro2::TokenStream> 
 					::std::result::Result::Err(#crate_name::db_connection::DbError::Other(::std::borrow::Cow::Borrowed("Pk must be Some")))
 				}
 			}
-			//TODO: remove `exec_delete` function
 			async fn exec_delete(#pk_name_ident: #pk_inner_type, connection: &mut #crate_name::db_connection::DbConnection) -> ::std::result::Result<Self, #crate_name::db_connection::DbError> {
 				let old_value = Self::get_by_pk(#pk_name_ident, connection).await.ok_or(#crate_name::db_connection::DbError::Other(::std::borrow::Cow::Borrowed("Not found")))?;
 				let mut query = String::new();

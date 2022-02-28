@@ -3,7 +3,7 @@ use mysql_async_orm::{db_connection::DbConnectionPool, DbTable};
 mod db_date;
 use db_date::*;
 
-#[derive(DbTable, Debug)]
+#[derive(DbTable, Debug, Clone)]
 #[from("clienti")]
 pub struct Cliente {
 	#[pk]
@@ -41,7 +41,7 @@ pub struct Cliente {
 	sedi: Vec<Sede>,
 }
 
-#[derive(DbTable, Debug)]
+#[derive(DbTable, Debug, Clone)]
 #[from("clienti__premi")]
 pub struct Premio {
 	#[pk]
@@ -52,7 +52,7 @@ pub struct Premio {
 	premio: f64,
 }
 
-#[derive(DbTable, Debug)]
+#[derive(DbTable, Debug, Clone)]
 #[from("clienti__metodi_di_pagamento")]
 pub struct MetodoDiPagamento {
 	#[pk]
@@ -61,7 +61,7 @@ pub struct MetodoDiPagamento {
 	sconto_aggiuntivo: f64,
 }
 
-#[derive(DbTable, Debug)]
+#[derive(DbTable, Debug, Clone)]
 #[from("clienti__sconti")]
 pub struct Scontistica {
 	#[pk]
@@ -74,7 +74,7 @@ pub struct Scontistica {
 	sconto4: f64,
 }
 
-#[derive(DbTable, Debug)]
+#[derive(DbTable, Debug, Clone)]
 #[from("clienti__spese_trasporto")]
 pub struct SpeseDiTrasporto {
 	#[pk]
@@ -84,7 +84,7 @@ pub struct SpeseDiTrasporto {
 	porto: u32,
 }
 
-#[derive(DbTable, Debug)]
+#[derive(DbTable, Debug, Clone)]
 #[from("clienti__listing")]
 pub struct Listing {
 	#[pk]
@@ -95,7 +95,7 @@ pub struct Listing {
 	cadenza_erogazione: u32,
 }
 
-#[derive(DbTable, Debug)]
+#[derive(DbTable, Debug, Clone)]
 #[from("clienti__referenti")]
 pub struct Referente {
 	#[pk]
@@ -107,7 +107,7 @@ pub struct Referente {
 	email: String,
 }
 
-#[derive(DbTable, Debug)]
+#[derive(DbTable, Debug, Clone)]
 #[from("clienti__agenti", joins = "LEFT JOIN agenti ON clienti__agenti.id_agente=agenti.id")]
 pub struct Agente {
 	#[pk]
@@ -115,7 +115,7 @@ pub struct Agente {
 	id_agente: u32,
 }
 
-#[derive(DbTable, Debug)]
+#[derive(DbTable, Debug, Clone)]
 #[from("clienti__articoli", joins = "LEFT JOIN articoli ON clienti__articoli.id_articolo=articoli.id LEFT JOIN unita_di_misura ON articoli.unita_misura=unita_di_misura.id")]
 pub struct ArticoloTrattato {
 	#[pk]
@@ -138,7 +138,7 @@ pub struct ArticoloTrattato {
 	descrizione: String,
 }
 
-#[derive(DbTable, Debug)]
+#[derive(DbTable, Debug, Clone)]
 #[from("clienti__sedi")]
 pub struct Sede {
 	#[pk]
@@ -161,10 +161,13 @@ async fn main() {
 	
 	
 	let mut cliente = Cliente::get_by_pk(1, &mut conn).await.unwrap();
-	println!("{:#?}", cliente);
+	cliente.ragione_sociale.push_str(" - U");
 	
-	cliente.ragione_sociale.push_str(" - update");
+	cliente.sedi = cliente.sedi.into_iter().filter(|s| s.descrizione.contains("U - U")).collect();
+	
 	let old_value = cliente.exec_update(&mut conn).await.unwrap();
 	println!("{:#?}", old_value);
+	let cliente = Cliente::get_by_pk(1, &mut conn).await.unwrap();
+	println!("{:#?}", cliente);
 	
 }

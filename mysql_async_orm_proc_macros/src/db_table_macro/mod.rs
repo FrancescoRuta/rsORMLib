@@ -208,11 +208,22 @@ pub fn get_prepare_update(db_table: &into_db_table::DbTable) -> Result<proc_macr
 		let rs_name = r.rs_name_ident;
 		let join_col = &r.join_col;
 		quote! {
-			//TODO: check diff
-			for row in &new_data.#rs_name {
-				<#rs_type as #crate_name::db_table::DbTable>::prepare_update(Some(#join_col), row, query, this_id);
+			let mut old_rows = ::std::collections::HashMap::new();
+			for row in &old_data.#rs_name {
+				old_rows.insert(<#rs_type as #crate_name::db_table::DbTable>::get_pk(row).unwrap(), row);
 			}
-			todo!()
+			for row in &new_data.#rs_name {
+				if let Some(pk) = <#rs_type as #crate_name::db_table::DbTable>::get_pk(row) {
+					if let Some(old_row) = old_rows.remove(&pk) {
+						<#rs_type as #crate_name::db_table::DbTable>::prepare_update(Some(#join_col), row, old_row, query, this_id);
+					}
+				} else {
+					<#rs_type as #crate_name::db_table::DbTable>::prepare_insert(Some(#join_col), row, query, this_id);
+				}
+			}
+			for (_, row) in old_rows {
+				<#rs_type as #crate_name::db_table::DbTable>::prepare_delete(Some(#join_col), row, query, this_id);
+			}
 		}
 	}).collect();
 	Ok(quote! {
@@ -226,9 +237,7 @@ pub fn get_prepare_update(db_table: &into_db_table::DbTable) -> Result<proc_macr
 			} else {
 				query.push_str(&::std::format!(#update_str_without_fk_suffix, this_id));
 			}
-			/*
 			#(#relations)*
-			*/
 		}
 	})
 }
