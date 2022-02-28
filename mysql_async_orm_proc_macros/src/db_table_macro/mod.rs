@@ -143,20 +143,15 @@ pub fn get_prepare_insert(db_table: &into_db_table::DbTable) -> Result<proc_macr
 			if let Some(fk_db_name) = fk {
 				query.push_str(&::std::format!(#insert_str_with_fk, fk_db_name, this_id - 1));
 				#(#query_push_with_fk)*
-				query.push_str(");SET @id_");
-				query.push_str(&format!("{}", this_id));
-				query.push_str(" = LAST_INSERT_ID();");
-				
-				#(#relations)*
 			} else {
 				query.push_str(#insert_str_without_fk);
 				#(#query_push_without_fk)*
-				query.push_str(");SET @id_");
-				query.push_str(&format!("{}", this_id));
-				query.push_str(" = LAST_INSERT_ID();");
-				
-				#(#relations)*
 			}
+			query.push_str(");SET @id_");
+			query.push_str(&format!("{}", this_id));
+			query.push_str(" = LAST_INSERT_ID();");
+			
+			#(#relations)*
 		}
 	})
 }
@@ -179,22 +174,61 @@ pub fn get_prepare_delete(db_table: &into_db_table::DbTable) -> Result<proc_macr
 	Ok(quote! {
 		if let Some(pk) = data.#pk_rs_name {
 			let this_id = this_id + 1;
-			if let Some(fk_db_name) = fk {
-				query.push_str(&::std::format!("SET @id_{}={};", this_id, pk));
-				#(#relations)*
-				query.push_str(&::std::format!(#delete_str_with_fk, fk_db_name, this_id - 1, this_id));
+			query.push_str(&::std::format!("SET @id_{}={};", this_id, pk));
+			#(#relations)*
+			query.push_str(&if let Some(fk_db_name) = fk {
+				::std::format!(#delete_str_with_fk, fk_db_name, this_id - 1, this_id)
 			} else {
-				query.push_str(&::std::format!("SET @id_{}={};", this_id, pk));
-				#(#relations)*
-				query.push_str(&::std::format!(#delete_str_without_fk, this_id));
-			}
+				::std::format!(#delete_str_without_fk, this_id)
+			});
 		}
 	})
 }
 
 
-pub fn get_prepare_update(_: &into_db_table::DbTable) -> Result<proc_macro2::TokenStream> {
+pub fn get_prepare_update(db_table: &into_db_table::DbTable) -> Result<proc_macro2::TokenStream> {
+	let crate_name = syn::Ident::new(CRATE_NAME, proc_macro2::Span::call_site());
+	let columns_except_pk = db_table.columns_except_pk.iter().filter(|c| !c.readonly).collect::<Vec<_>>();
+	let update_str_prefix = format!("UPDATE {} SET ", db_table.from.table);
+	let update_str_with_fk_suffix = format!(" WHERE {{}}=@id_{{}} AND {}=@id_{{}};", db_table.pk.db_name);
+	let update_str_without_fk_suffix = format!(" WHERE {}=@id_{{}};", db_table.pk.db_name);
+	let pk_rs_name = db_table.pk.rs_name_ident;
+	let query_push_update_cols = columns_except_pk.iter().enumerate().map(|(index, c)| {
+		let comma = if index == 0 { quote!() } else { quote!(query.push(',');) };
+		let db_name_str = format!("{}=", c.db_name);
+		let rs_name = c.rs_name_ident;
+		quote! {
+			#comma
+			query.push_str(#db_name_str);
+			query.push_str(&#crate_name::mysql_async::Value::from(&new_data.#rs_name).as_sql(false));
+		}
+	});
+	let relations: Vec<_> = db_table.relations.iter().map(|r| {
+		let rs_type = r.ty;
+		let rs_name = r.rs_name_ident;
+		let join_col = &r.join_col;
+		quote! {
+			//TODO: check diff
+			for row in &new_data.#rs_name {
+				<#rs_type as #crate_name::db_table::DbTable>::prepare_update(Some(#join_col), row, query, this_id);
+			}
+			todo!()
+		}
+	}).collect();
 	Ok(quote! {
-		todo!()
+		if let Some(pk) = new_data.#pk_rs_name {
+			let this_id = this_id + 1;
+			query.push_str(&::std::format!("SET @id_{}={};", this_id, pk));
+			query.push_str(#update_str_prefix);
+			#(#query_push_update_cols)*
+			if let Some(fk_db_name) = fk {
+				query.push_str(&::std::format!(#update_str_with_fk_suffix, fk_db_name, this_id - 1, this_id));
+			} else {
+				query.push_str(&::std::format!(#update_str_without_fk_suffix, this_id));
+			}
+			/*
+			#(#relations)*
+			*/
+		}
 	})
 }

@@ -163,25 +163,8 @@ async fn main() {
 	let mut cliente = Cliente::get_by_pk(1, &mut conn).await.unwrap();
 	println!("{:#?}", cliente);
 	
-	cliente.id = None;
-	cliente.premi.iter_mut().for_each(|v| v.id = None);
-	cliente.metodi_di_pagamento.iter_mut().for_each(|v| v.id = None);
-	cliente.scontistiche.iter_mut().for_each(|v| v.id = None);
-	cliente.spese_di_trasporto.iter_mut().for_each(|v| v.id = None);
-	cliente.listing.iter_mut().for_each(|v| v.id = None);
-	cliente.referenti.iter_mut().for_each(|v| v.id = None);
-	cliente.agenti.iter_mut().for_each(|v| v.id = None);
-	cliente.articoli_trattati.iter_mut().for_each(|v| v.id = None);
-	cliente.sedi.iter_mut().for_each(|v| v.id = None);
-	
-	cliente.ragione_sociale.push_str(" - clone");
-	let id = cliente.exec_insert(&mut conn).await.unwrap();
-	println!("{}", id);
-	
-	
-	let cliente = Cliente::get_by_pk(id, &mut conn).await.unwrap();
-	println!("{:#?}", cliente);
-	
-	Cliente::exec_delete(id, &mut conn).await.unwrap();
+	cliente.ragione_sociale.push_str(" - update");
+	let old_value = cliente.exec_update(&mut conn).await.unwrap();
+	println!("{:#?}", old_value);
 	
 }
