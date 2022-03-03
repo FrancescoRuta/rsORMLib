@@ -172,7 +172,7 @@ pub trait QueryableConn {
 	where
 		S: StatementLike + 'a,
 		P: Into<mysql_async::Params> + Send + 'a;
-	fn exec_batch<'a, S, P, R, I>(&'a mut self, stmt: S, params: I) -> BoxFuture<'a, ()>
+	fn exec_batch<'a, S, P, I>(&'a mut self, stmt: S, params: I) -> BoxFuture<'a, ()>
 	where
 		S: StatementLike + 'a,
 		I: IntoIterator<Item = P> + Send + 'a,
@@ -238,7 +238,7 @@ impl QueryableConn for DbConnection {
 		self.conn.exec_drop(stmt, params)
 	}
 
-	fn exec_batch<'a, S, P, R, I>(&'a mut self, stmt: S, params: I) -> BoxFuture<'a, ()>
+	fn exec_batch<'a, S, P, I>(&'a mut self, stmt: S, params: I) -> BoxFuture<'a, ()>
 	where
 		S: StatementLike + 'a,
 		I: IntoIterator<Item = P> + Send + 'a,
@@ -310,7 +310,7 @@ impl QueryableConn for DbTransaction<'_> {
 		self.conn.exec_drop(stmt, params)
 	}
 
-	fn exec_batch<'a, S, P, R, I>(&'a mut self, stmt: S, params: I) -> BoxFuture<'a, ()>
+	fn exec_batch<'a, S, P, I>(&'a mut self, stmt: S, params: I) -> BoxFuture<'a, ()>
 	where
 		S: StatementLike + 'a,
 		I: IntoIterator<Item = P> + Send + 'a,
