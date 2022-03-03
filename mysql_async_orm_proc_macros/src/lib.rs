@@ -37,6 +37,8 @@ fn db_table_macro(input: &syn::DeriveInput) -> Result<proc_macro2::TokenStream> 
 	let prepare_update = db_table_macro::get_prepare_update(&db_table)?;
 	let prepare_delete = db_table_macro::get_prepare_delete(&db_table)?;
 	
+	let get_by_pk_sql = format!("SELECT {{}} FROM {{}} WHERE {}=?", pk_db_string);
+	
 	let sql_names = [pk_db_string.clone()].into_iter().chain(db_table.columns_except_pk.iter().map(|f| {
 		let default_column_name = f.rs_name_ident;
 		if let Some(from) = &f.from_attribute {
@@ -161,7 +163,7 @@ fn db_table_macro(input: &syn::DeriveInput) -> Result<proc_macro2::TokenStream> 
 					static ref SQL: ::std::string::String = {
 						let (_, _, order_by, sql) = <<#name as #crate_name::db_table::DbTable>::DataCollector as #crate_name::db_table::DbTableDataCollector>::sql();
 						let sql = sql.iter().map(|(select, from)| format!(
-							"SELECT {} FROM {} WHERE clienti.id=?",
+							#get_by_pk_sql,
 							select, from
 						)).collect::<::std::vec::Vec<_>>().join(" UNION ALL ");
 						let sql = std::format!("{} ORDER BY {};", sql, order_by.iter().map(|i| (i + 1).to_string()).collect::<::std::vec::Vec<_>>().join(","));
