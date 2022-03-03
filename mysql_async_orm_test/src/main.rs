@@ -1,7 +1,5 @@
 use mysql_async_orm::{db_connection::DbConnectionPool, DbTable};
 
-mod db_date;
-
 #[derive(DbTable, Debug)]
 #[from("articoli")]
 pub struct Articolo {
