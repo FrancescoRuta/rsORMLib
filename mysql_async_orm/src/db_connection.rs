@@ -28,6 +28,11 @@ impl DbConnectionPool {
 			pool: mysql_async::Pool::new(opts),
 		}
 	}
+	pub fn from_url<T: AsRef<str>>(url: T) -> Result<Self, DbError> {
+		Ok(DbConnectionPool {
+			pool: mysql_async::Pool::from_url(url)?,
+		})
+	}
 	pub async fn get_conn(&self) -> Result<DbConnection, DbError> {
 		Ok(DbConnection::new(self.pool.get_conn().await?))
 	}
