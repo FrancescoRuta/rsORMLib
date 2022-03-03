@@ -152,14 +152,14 @@ fn db_table_macro(input: &syn::DeriveInput) -> Result<proc_macro2::TokenStream> 
 			}
 		}
 		impl #name {
-			fn vec_from_rows(mut rows: Vec<#crate_name::mysql_async::Row>) -> ::std::vec::Vec<Self> {
+			pub fn vec_from_rows(mut rows: Vec<#crate_name::mysql_async::Row>) -> ::std::vec::Vec<Self> {
 				let mut collector = <<Self as #crate_name::db_table::DbTable>::DataCollector as #crate_name::db_table::DbTableDataCollector>::new(0);
 				for row in rows.iter_mut() {
 					#crate_name::db_table::DbTableDataCollector::push_next(&mut collector, row);
 				}
 				#crate_name::db_table::DbTableDataCollector::build(collector)
 			}
-			async fn get_by_pk(pk: #pk_inner_type, connection: &mut #crate_name::db_connection::DbConnection) -> ::std::result::Result<Self, #crate_name::db_connection::DbError> {
+			pub async fn get_by_pk(pk: #pk_inner_type, connection: &mut #crate_name::db_connection::DbConnection) -> ::std::result::Result<Self, #crate_name::db_connection::DbError> {
 				#crate_name::lazy_static! {
 					static ref SQL: ::std::string::String = {
 						let (_, _, order_by, sql) = <<#name as #crate_name::db_table::DbTable>::DataCollector as #crate_name::db_table::DbTableDataCollector>::sql();
@@ -179,7 +179,7 @@ fn db_table_macro(input: &syn::DeriveInput) -> Result<proc_macro2::TokenStream> 
 				let mut data = data.drain(..);
 				data.next().ok_or(#crate_name::db_connection::DbError::Other(::std::borrow::Cow::Borrowed("Not found")))
 			}
-			async fn exec_update(&self, connection: &mut #crate_name::db_connection::DbConnection) -> ::std::result::Result<Self, #crate_name::db_connection::DbError> {
+			pub async fn exec_update(&self, connection: &mut #crate_name::db_connection::DbConnection) -> ::std::result::Result<Self, #crate_name::db_connection::DbError> {
 				if let Some(pk) = &self.#pk_name_ident {
 					let old_value = Self::get_by_pk(*pk, connection).await?;
 					let mut query = String::new();
@@ -190,14 +190,14 @@ fn db_table_macro(input: &syn::DeriveInput) -> Result<proc_macro2::TokenStream> 
 					::std::result::Result::Err(#crate_name::db_connection::DbError::Other(::std::borrow::Cow::Borrowed("Pk must be Some")))
 				}
 			}
-			async fn exec_delete(#pk_name_ident: #pk_inner_type, connection: &mut #crate_name::db_connection::DbConnection) -> ::std::result::Result<Self, #crate_name::db_connection::DbError> {
+			pub async fn exec_delete(#pk_name_ident: #pk_inner_type, connection: &mut #crate_name::db_connection::DbConnection) -> ::std::result::Result<Self, #crate_name::db_connection::DbError> {
 				let old_value = Self::get_by_pk(#pk_name_ident, connection).await?;
 				let mut query = String::new();
 				<Self as #crate_name::db_table::DbTable>::prepare_delete(::std::option::Option::None, &old_value, &mut query, 0);
 				connection.query_drop(query).await?;
 				Ok(old_value)
 			}
-			async fn exec_insert(&self, connection: &mut #crate_name::db_connection::DbConnection) -> ::std::result::Result<#pk_inner_type, #crate_name::db_connection::DbError> {
+			pub async fn exec_insert(&self, connection: &mut #crate_name::db_connection::DbConnection) -> ::std::result::Result<#pk_inner_type, #crate_name::db_connection::DbError> {
 				if self.#pk_name_ident.is_none() {
 					let mut query = String::new();
 					<Self as #crate_name::db_table::DbTable>::prepare_insert(::std::option::Option::None, self, &mut query, 0);
