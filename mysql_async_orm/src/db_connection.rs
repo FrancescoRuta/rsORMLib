@@ -117,7 +117,6 @@ impl DbConnection {
 	pub async fn exec_drop<
 		S: StatementLike,
 		P: Into<mysql_async::Params> + Send,
-		R: FromRow + Send + 'static,
 	>(
 		&mut self,
 		stmt: S,
@@ -165,11 +164,10 @@ pub trait QueryableConn {
 		S: StatementLike + 'a,
 		P: Into<mysql_async::Params> + Send + 'a,
 		R: FromRow + Send + 'static;
-	fn exec_drop<'a, S, P, R>(&'a mut self, stmt: S, params: P) -> BoxFuture<'a, ()>
+	fn exec_drop<'a, S, P>(&'a mut self, stmt: S, params: P) -> BoxFuture<'a, ()>
 	where
 		S: StatementLike + 'a,
-		P: Into<mysql_async::Params> + Send + 'a,
-		R: FromRow + Send + 'static;
+		P: Into<mysql_async::Params> + Send + 'a;
 	fn exec_batch<'a, S, P, R, I>(&'a mut self, stmt: S, params: I) -> BoxFuture<'a, ()>
 	where
 		S: StatementLike + 'a,
@@ -227,11 +225,10 @@ impl QueryableConn for DbConnection {
 		self.conn.exec_first(stmt, params)
 	}
 
-	fn exec_drop<'a, S, P, R>(&'a mut self, stmt: S, params: P) -> BoxFuture<'a, ()>
+	fn exec_drop<'a, S, P>(&'a mut self, stmt: S, params: P) -> BoxFuture<'a, ()>
 	where
 		S: StatementLike + 'a,
 		P: Into<mysql_async::Params> + Send + 'a,
-		R: FromRow + Send + 'static,
 	{
 		self.conn.exec_drop(stmt, params)
 	}
@@ -296,11 +293,10 @@ impl QueryableConn for DbTransaction<'_> {
 		self.conn.exec_first(stmt, params)
 	}
 
-	fn exec_drop<'a, S, P, R>(&'a mut self, stmt: S, params: P) -> BoxFuture<'a, ()>
+	fn exec_drop<'a, S, P>(&'a mut self, stmt: S, params: P) -> BoxFuture<'a, ()>
 	where
 		S: StatementLike + 'a,
 		P: Into<mysql_async::Params> + Send + 'a,
-		R: FromRow + Send + 'static,
 	{
 		self.conn.exec_drop(stmt, params)
 	}
