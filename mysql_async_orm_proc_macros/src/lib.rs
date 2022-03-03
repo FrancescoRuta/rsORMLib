@@ -156,7 +156,7 @@ fn db_table_macro(input: &syn::DeriveInput) -> Result<proc_macro2::TokenStream> 
 				}
 				#crate_name::db_table::DbTableDataCollector::build(collector)
 			}
-			async fn get_by_pk(pk: #pk_inner_type, connection: &mut #crate_name::db_connection::DbConnection) -> ::std::option::Option<Self> {
+			async fn get_by_pk(pk: #pk_inner_type, connection: &mut #crate_name::db_connection::DbConnection) -> ::std::result::Result<Self, #crate_name::db_connection::DbError> {
 				#crate_name::lazy_static! {
 					static ref SQL: ::std::string::String = {
 						let (_, _, order_by, sql) = <<#name as #crate_name::db_table::DbTable>::DataCollector as #crate_name::db_table::DbTableDataCollector>::sql();
@@ -171,13 +171,13 @@ fn db_table_macro(input: &syn::DeriveInput) -> Result<proc_macro2::TokenStream> 
 				}
 				let params: ::std::vec::Vec<_> = (0..*PARAM_COUNT).map(|_| pk).collect();
 				let sql: &str = &*SQL;
-				let mut data = Self::vec_from_rows(connection.exec(sql, params).await.ok()?);
+				let mut data = Self::vec_from_rows(connection.exec(sql, params).await?);
 				let mut data = data.drain(..);
-				data.next()
+				data.next().ok_or(#crate_name::db_connection::DbError::Other(::std::borrow::Cow::Borrowed("Not found")))
 			}
 			async fn exec_update(&self, connection: &mut #crate_name::db_connection::DbConnection) -> ::std::result::Result<Self, #crate_name::db_connection::DbError> {
 				if let Some(pk) = &self.#pk_name_ident {
-					let old_value = Self::get_by_pk(*pk, connection).await.ok_or(#crate_name::db_connection::DbError::Other(::std::borrow::Cow::Borrowed("Not found")))?;
+					let old_value = Self::get_by_pk(*pk, connection).await?;
 					let mut query = String::new();
 					<Self as #crate_name::db_table::DbTable>::prepare_update(::std::option::Option::None, self, &old_value, &mut query, 0);
 					connection.query_drop(query).await?;
@@ -187,7 +187,7 @@ fn db_table_macro(input: &syn::DeriveInput) -> Result<proc_macro2::TokenStream> 
 				}
 			}
 			async fn exec_delete(#pk_name_ident: #pk_inner_type, connection: &mut #crate_name::db_connection::DbConnection) -> ::std::result::Result<Self, #crate_name::db_connection::DbError> {
-				let old_value = Self::get_by_pk(#pk_name_ident, connection).await.ok_or(#crate_name::db_connection::DbError::Other(::std::borrow::Cow::Borrowed("Not found")))?;
+				let old_value = Self::get_by_pk(#pk_name_ident, connection).await?;
 				let mut query = String::new();
 				<Self as #crate_name::db_table::DbTable>::prepare_delete(::std::option::Option::None, &old_value, &mut query, 0);
 				connection.query_drop(query).await?;
