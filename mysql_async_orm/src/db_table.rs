@@ -10,7 +10,7 @@ pub trait DbTable where Self: Sized {
 pub trait DbTableDataCollector where Self: Sized {
 	type Item;
 	const SIZE: usize;
-	fn sql() -> (&'static str, String, Vec<usize>, Vec<(String, String)>);
+	fn sql() -> (&'static str, String, Vec<usize>, Vec<(&'static str, String, String)>);
 	fn new(offset: usize) -> Self;
 	fn push_next(&mut self, next_row: &mut mysql_async::Row) -> Option<()>;
 	fn build(self) -> Vec<Self::Item>;

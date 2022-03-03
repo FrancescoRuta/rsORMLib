@@ -1,157 +1,77 @@
 use mysql_async_orm::{db_connection::DbConnectionPool, DbTable};
 
 mod db_date;
-use db_date::*;
 
-#[derive(DbTable, Debug, Clone)]
-#[from("clienti")]
-pub struct Cliente {
+#[derive(DbTable, Debug)]
+#[from("articoli")]
+pub struct Articolo {
 	#[pk]
-	id: Option<u32>,
-	ragione_sociale: String,
-	partita_iva: String,
-	codice_sdi: String,
-	indirizzo: String,
-	sede: u32,
-	email: String,
-	pec: String,
-	tel1: String,
-	tel2: String,
-	sito_web: String,
-	gruppo: u32,
-	codice: u32,
-	provvigione_agente: f64,
-	#[relation("id_cliente")]
-	premi: Vec<Premio>,
-	#[relation("id_cliente")]
-	metodi_di_pagamento: Vec<MetodoDiPagamento>,
-	#[relation("id_cliente")]
-	scontistiche: Vec<Scontistica>,
-	#[relation("id_cliente")]
-	spese_di_trasporto: Vec<SpeseDiTrasporto>,
-	#[relation("id_cliente")]
-	listing: Vec<Listing>,
-	#[relation("id_cliente")]
-	referenti: Vec<Referente>,
-	#[relation("id_cliente")]
-	agenti: Vec<Agente>,
-	#[relation("id_cliente")]
-	articoli_trattati: Vec<ArticoloTrattato>,
-	#[relation("id_cliente")]
-	sedi: Vec<Sede>,
-}
-
-#[derive(DbTable, Debug, Clone)]
-#[from("clienti__premi")]
-pub struct Premio {
-	#[pk]
-	id: Option<u32>,
-	data_inizio: DBDate,
-	data_fine: DBDate,
-	importo_minimo: f64,
-	premio: f64,
-}
-
-#[derive(DbTable, Debug, Clone)]
-#[from("clienti__metodi_di_pagamento")]
-pub struct MetodoDiPagamento {
-	#[pk]
-	id: Option<u32>,
-	id_metodo_di_pagamento: u32,
-	sconto_aggiuntivo: f64,
-}
-
-#[derive(DbTable, Debug, Clone)]
-#[from("clienti__sconti")]
-pub struct Scontistica {
-	#[pk]
-	id: Option<u32>,
-	data_inizio: DBDate,
-	data_fine: DBDate,
-	sconto1: f64,
-	sconto2: f64,
-	sconto3: f64,
-	sconto4: f64,
-}
-
-#[derive(DbTable, Debug, Clone)]
-#[from("clienti__spese_trasporto")]
-pub struct SpeseDiTrasporto {
-	#[pk]
-	id: Option<u32>,
-	data_inizio: DBDate,
-	data_fine: DBDate,
-	porto: u32,
-}
-
-#[derive(DbTable, Debug, Clone)]
-#[from("clienti__listing")]
-pub struct Listing {
-	#[pk]
-	id: Option<u32>,
-	data_inizio: DBDate,
-	data_fine: DBDate,
-	importo: f64,
-	cadenza_erogazione: u32,
-}
-
-#[derive(DbTable, Debug, Clone)]
-#[from("clienti__referenti")]
-pub struct Referente {
-	#[pk]
-	id: Option<u32>,
-	nome: String,
-	ruolo: u32,
-	telefono: String,
-	cellulare: String,
-	email: String,
-}
-
-#[derive(DbTable, Debug, Clone)]
-#[from("clienti__agenti", joins = "LEFT JOIN agenti ON clienti__agenti.id_agente=agenti.id")]
-pub struct Agente {
-	#[pk]
-	id: Option<u32>,
-	id_agente: u32,
-}
-
-#[derive(DbTable, Debug, Clone)]
-#[from("clienti__articoli", joins = "LEFT JOIN articoli ON clienti__articoli.id_articolo=articoli.id LEFT JOIN unita_di_misura ON articoli.unita_misura=unita_di_misura.id")]
-pub struct ArticoloTrattato {
-	#[pk]
-	id: Option<u32>,
-	id_articolo: u32,
-	applica_listino_personalizzato: bool,
-	listino_personalizzato: f64,
-	provvigione_agente: f64,
-	#[from("simbolo", table = "unita_di_misura")]
-	#[readonly]
-	#[allow(dead_code)]
-	unita_di_misura: String,
-	#[from(table = "articoli")]
-	#[readonly]
-	#[allow(dead_code)]
+	id: Option<usize>,
+	#[from("unita_misura")]
+	unita_di_misura: u8,
+	classificazione: i32,
 	codice: String,
-	#[from(table = "articoli")]
-	#[readonly]
-	#[allow(dead_code)]
 	descrizione: String,
+	codice_ean: String,
+	descrizione_estesa: String,
+	note: String,
+	scorta_minima: f64,
+	#[from("giorni_riordino")]
+	giorni_di_riordino: i32,
+	qta_minima_ordinabile: f64,
+	altezza: f64,
+	larghezza: f64,
+	profondita: f64,
+	peso: f64,
+	colli_per_bancale: i32,
+	pezzi_per_blister: i32,
+	formato_flacone: f64,
+	listino_imponibile: f64,
+	#[from("prezzo_minimo_vendita_imponibile")]
+	prezzo_minimo_di_vendita_imponibile: f64,
+	#[from("prezzo_minimo_vendita2_imponibile")]
+	prezzo_cessione_minimo_di_vendita_imponibile: f64,
+	#[from("prezzo_minimo_vendita_promo_imponibile")]
+	prezzo_cessione_minimo_di_vendita_promo_imponibile: f64,
+	private_label: bool,
+	#[from("distinte_nascoste")]
+	distinte_nascoste_in_produzione: bool,
+	tipo_controllo_qualita: u8,
+	parametri_controllo_qualita: String,
+	#[relation("id_articolo_prodotto")]
+	distinte_base: Vec<DistintaBase>,
 }
 
-#[derive(DbTable, Debug, Clone)]
-#[from("clienti__sedi")]
-pub struct Sede {
+#[derive(DbTable, Debug)]
+#[from("produzione__formule")]
+pub struct DistintaBase {
 	#[pk]
-	id: Option<u32>,
-	comune: u32,
+	id: Option<usize>,
+	#[from("descrizione")]
+	nome: String,
+	#[relation("id_formula")]
+	articoli: Vec<ArticoloDistintaBase>,
+}
+
+#[derive(DbTable, Debug)]
+#[from("produzione__distinta_base", joins = "LEFT JOIN articoli articolo_distinta ON produzione__distinta_base.id_articolo=articolo_distinta.id LEFT JOIN unita_di_misura unita_di_misura_articolo_distinta ON articolo_distinta.unita_misura=unita_di_misura_articolo_distinta.id")]
+pub struct ArticoloDistintaBase {
+	#[pk]
+	id: Option<usize>,
+	id_articolo: i32,
+	qta: f64,
+	#[from("simbolo", table = "unita_di_misura_articolo_distinta")]
+	#[readonly]
+	unita_di_misura: String,
+	#[from(table = "articolo_distinta")]
+	#[readonly]
+	codice: String,
+	#[from(table = "articolo_distinta")]
+	#[readonly]
 	descrizione: String,
-	cap: u32,
-	indirizzo: String,
-	iban: String,
-	banca: String,
-	codice: u32,
-	abi: u32,
-	cad: u32,
+	#[from("ultimo_costo", table = "articolo_distinta")]
+	#[readonly]
+	costo: f64,
 }
 
 #[tokio::main]
@@ -160,14 +80,6 @@ async fn main() {
 	let mut conn = pool.get_conn().await.unwrap();
 	
 	
-	let mut cliente = Cliente::get_by_pk(1, &mut conn).await.unwrap();
-	cliente.ragione_sociale.push_str(" - U");
-	
-	cliente.sedi = cliente.sedi.into_iter().filter(|s| s.descrizione.contains("U - U")).collect();
-	
-	let old_value = cliente.exec_update(&mut conn).await.unwrap();
-	println!("{:#?}", old_value);
-	let cliente = Cliente::get_by_pk(1, &mut conn).await.unwrap();
-	println!("{:#?}", cliente);
-	
+	let articolo = Articolo::get_by_pk(1, &mut conn).await.unwrap();
+	println!("{:#?}", articolo)
 }

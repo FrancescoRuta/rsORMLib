@@ -37,7 +37,7 @@ fn db_table_macro(input: &syn::DeriveInput) -> Result<proc_macro2::TokenStream> 
 	let prepare_update = db_table_macro::get_prepare_update(&db_table)?;
 	let prepare_delete = db_table_macro::get_prepare_delete(&db_table)?;
 	
-	let get_by_pk_sql = format!("SELECT {{}} FROM {{}} WHERE {}=?", pk_db_string);
+	let get_by_pk_sql = format!("SELECT {{}} FROM {{}} {{}} WHERE {}=?", pk_db_string);
 	
 	let sql_names = [pk_db_string.clone()].into_iter().chain(db_table.columns_except_pk.iter().map(|f| {
 		let default_column_name = f.rs_name_ident;
@@ -67,7 +67,7 @@ fn db_table_macro(input: &syn::DeriveInput) -> Result<proc_macro2::TokenStream> 
 	let select_format_string = sql_names.collect::<Vec<String>>().join(",");
 	let sql_fn = if db_table.relations.len() == 0 {
 		quote! {
-			(#table, #null_format_string.to_string(), vec![0], vec![(#select_format_string.to_string(), #joins.to_string())])
+			(#table, #null_format_string.to_string(), vec![0], vec![(#from, #select_format_string.to_string(), #joins.to_string())])
 		}
 	} else {
 		let mut null_format_args = Vec::new();
@@ -97,7 +97,7 @@ fn db_table_macro(input: &syn::DeriveInput) -> Result<proc_macro2::TokenStream> 
 			
 			null_format_args.push(quote! { #f_name.1 });
 			
-			let from_format_string = format!("{}{{}} LEFT JOIN {{}} ON {}={{}}.{}{{}}", from, pk_db_string, fk);
+			let from_format_string = format!("{{}} LEFT JOIN {{}} ON {}={{}}.{} {{}}", pk_db_string, fk);
 			let from_format_args = (0..db_table.relations.len())
 				.map(|i|
 					if i == index {
@@ -109,7 +109,8 @@ fn db_table_macro(input: &syn::DeriveInput) -> Result<proc_macro2::TokenStream> 
 				);
 			
 			v_ext.push(quote! {
-				v.extend(#f_name.3.iter().map(|(select, from)| (
+				v.extend(#f_name.3.iter().map(|(_, select, from)| (
+					#from,
 					format!(#select_format_string, #(#from_format_args,)*),
 					format!(#from_format_string, #joins, #f_name.0, #f_name.0, from),
 				)));
@@ -162,11 +163,12 @@ fn db_table_macro(input: &syn::DeriveInput) -> Result<proc_macro2::TokenStream> 
 				#crate_name::lazy_static! {
 					static ref SQL: ::std::string::String = {
 						let (_, _, order_by, sql) = <<#name as #crate_name::db_table::DbTable>::DataCollector as #crate_name::db_table::DbTableDataCollector>::sql();
-						let sql = sql.iter().map(|(select, from)| format!(
+						let sql = sql.iter().map(|(table, select, from)| format!(
 							#get_by_pk_sql,
-							select, from
+							select, table, from
 						)).collect::<::std::vec::Vec<_>>().join(" UNION ALL ");
 						let sql = std::format!("{} ORDER BY {};", sql, order_by.iter().map(|i| (i + 1).to_string()).collect::<::std::vec::Vec<_>>().join(","));
+						println!("{}", sql);
 						sql
 					};
 					static ref PARAM_COUNT: usize = <<#name as #crate_name::db_table::DbTable>::DataCollector as #crate_name::db_table::DbTableDataCollector>::sql().3.len();
@@ -250,7 +252,7 @@ fn db_table_macro(input: &syn::DeriveInput) -> Result<proc_macro2::TokenStream> 
 				type Item = #name;
 				const SIZE: usize = #db_table_col_count;
 				
-				fn sql() -> (&'static str, String, Vec<usize>, Vec<(String, String)>) {
+				fn sql() -> (&'static str, String, Vec<usize>, Vec<(&'static str, String, String)>) {
 					#sql_fn
 				}
 				

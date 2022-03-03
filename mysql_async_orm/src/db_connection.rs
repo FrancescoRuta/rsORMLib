@@ -66,7 +66,6 @@ impl DbConnection {
 		&mut self,
 		query: Q,
 	) -> Result<Vec<R>, DbError> {
-		println!("{}", query.as_ref());
 		self.conn.query(query).await
 	}
 
@@ -74,7 +73,6 @@ impl DbConnection {
 		&mut self,
 		query: Q,
 	) -> Result<Option<R>, DbError> {
-		println!("{}", query.as_ref());
 		self.conn.query_first(query).await
 	}
 
@@ -82,7 +80,6 @@ impl DbConnection {
 		&'a mut self,
 		query: Q,
 	) -> Result<mysql_async::QueryResult<'a, 'static, mysql_async::TextProtocol>, DbError> {
-		println!("{}", query.as_ref());
 		self.conn.query_iter(query).await
 	}
 
@@ -90,7 +87,6 @@ impl DbConnection {
 		&mut self,
 		query: Q,
 	) -> Result<(), DbError> {
-		println!("{}", query.as_ref());
 		self.conn.query_drop(query).await
 	}
 
