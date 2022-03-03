@@ -134,6 +134,10 @@ impl DbConnection {
 	{
 		self.conn.exec_batch(stmt, params).await
 	}
+	
+	pub fn last_insert_id(&self) -> Option<u64> {
+		self.conn.last_insert_id()
+	}
 }
 
 type BoxFuture<'a, T> = Pin<Box<dyn Future<Output = Result<T, DbError>> + Send + 'a>>;
@@ -174,6 +178,7 @@ pub trait QueryableConn {
 		I: IntoIterator<Item = P> + Send + 'a,
 		I::IntoIter: Send,
 		P: Into<mysql_async::Params> + Send;
+	fn last_insert_id(&self) -> Option<u64>;
 }
 
 impl QueryableConn for DbConnection {
@@ -242,6 +247,10 @@ impl QueryableConn for DbConnection {
 	{
 		self.conn.exec_batch(stmt, params)
 	}
+	
+	fn last_insert_id(&self) -> Option<u64> {
+		self.conn.last_insert_id()
+	}
 }
 
 impl QueryableConn for DbTransaction<'_> {
@@ -309,5 +318,9 @@ impl QueryableConn for DbTransaction<'_> {
 		P: Into<mysql_async::Params> + Send,
 	{
 		self.conn.exec_batch(stmt, params)
+	}
+	
+	fn last_insert_id(&self) -> Option<u64> {
+		self.conn.last_insert_id()
 	}
 }
