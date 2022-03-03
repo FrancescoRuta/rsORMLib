@@ -125,7 +125,7 @@ impl DbConnection {
 		self.conn.exec_drop(stmt, params).await
 	}
 
-	pub async fn exec_batch<S, P, R, I>(&mut self, stmt: S, params: I) -> Result<(), DbError>
+	pub async fn exec_batch<S, P, I>(&mut self, stmt: S, params: I) -> Result<(), DbError>
 	where
 		S: StatementLike,
 		I: IntoIterator<Item = P> + Send,
