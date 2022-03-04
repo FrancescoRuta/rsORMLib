@@ -1,6 +1,6 @@
-use mysql_async_orm::{db_connection::DbConnectionPool, DbTable};
+use mysql_async_orm::{db_connection::DbConnectionPool, DbModel};
 
-#[derive(DbTable, Debug)]
+#[derive(DbModel, Debug)]
 #[from("articoli")]
 pub struct Articolo {
 	#[pk]
@@ -40,7 +40,7 @@ pub struct Articolo {
 	distinte_base: Vec<DistintaBase>,
 }
 
-#[derive(DbTable, Debug)]
+#[derive(DbModel, Debug)]
 #[from("produzione__formule")]
 pub struct DistintaBase {
 	#[pk]
@@ -51,7 +51,7 @@ pub struct DistintaBase {
 	articoli: Vec<ArticoloDistintaBase>,
 }
 
-#[derive(DbTable, Debug)]
+#[derive(DbModel, Debug)]
 #[from("produzione__distinta_base", joins = "LEFT JOIN articoli articolo_distinta ON produzione__distinta_base.id_articolo=articolo_distinta.id LEFT JOIN unita_di_misura unita_di_misura_articolo_distinta ON articolo_distinta.unita_misura=unita_di_misura_articolo_distinta.id")]
 pub struct ArticoloDistintaBase {
 	#[pk]
