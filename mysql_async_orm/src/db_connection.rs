@@ -140,6 +140,86 @@ impl DbConnection {
 	}
 }
 
+impl DbTransaction<'_> {
+	
+	pub async fn query<Q: AsRef<str> + Send + Sync, R: FromRow + Send + 'static>(
+		&mut self,
+		query: Q,
+	) -> Result<Vec<R>, DbError> {
+		self.conn.query(query).await
+	}
+
+	pub async fn query_first<Q: AsRef<str> + Send + Sync, R: FromRow + Send + 'static>(
+		&mut self,
+		query: Q,
+	) -> Result<Option<R>, DbError> {
+		self.conn.query_first(query).await
+	}
+
+	pub async fn query_iter<'a, Q: AsRef<str> + Send + Sync + 'a>(
+		&'a mut self,
+		query: Q,
+	) -> Result<mysql_async::QueryResult<'a, 'static, mysql_async::TextProtocol>, DbError> {
+		self.conn.query_iter(query).await
+	}
+
+	pub async fn query_drop<Q: AsRef<str> + Send + Sync>(
+		&mut self,
+		query: Q,
+	) -> Result<(), DbError> {
+		self.conn.query_drop(query).await
+	}
+
+	pub async fn exec<
+		S: StatementLike,
+		P: Into<mysql_async::Params> + Send,
+		R: FromRow + Send + 'static,
+	>(
+		&mut self,
+		stmt: S,
+		params: P,
+	) -> Result<Vec<R>, DbError> {
+		self.conn.exec(stmt, params).await
+	}
+
+	pub async fn exec_first<
+		S: StatementLike,
+		P: Into<mysql_async::Params> + Send,
+		R: FromRow + Send + 'static,
+	>(
+		&mut self,
+		stmt: S,
+		params: P,
+	) -> Result<Option<R>, DbError> {
+		self.conn.exec_first(stmt, params).await
+	}
+
+	pub async fn exec_drop<
+		S: StatementLike,
+		P: Into<mysql_async::Params> + Send,
+	>(
+		&mut self,
+		stmt: S,
+		params: P,
+	) -> Result<(), DbError> {
+		self.conn.exec_drop(stmt, params).await
+	}
+
+	pub async fn exec_batch<S, P, I>(&mut self, stmt: S, params: I) -> Result<(), DbError>
+	where
+		S: StatementLike,
+		I: IntoIterator<Item = P> + Send,
+		I::IntoIter: Send,
+		P: Into<mysql_async::Params> + Send,
+	{
+		self.conn.exec_batch(stmt, params).await
+	}
+	
+	pub fn last_insert_id(&self) -> Option<u64> {
+		self.conn.last_insert_id()
+	}
+}
+
 type BoxFuture<'a, T> = Pin<Box<dyn Future<Output = Result<T, DbError>> + Send + 'a>>;
 
 pub trait QueryableConn {
