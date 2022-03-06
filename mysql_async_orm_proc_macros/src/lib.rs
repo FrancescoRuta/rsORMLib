@@ -168,7 +168,6 @@ fn db_model_macro(input: &syn::DeriveInput) -> Result<proc_macro2::TokenStream> 
 							select, table, from
 						)).collect::<::std::vec::Vec<_>>().join(" UNION ALL ");
 						let sql = std::format!("{} ORDER BY {};", sql, order_by.iter().map(|i| (i + 1).to_string()).collect::<::std::vec::Vec<_>>().join(","));
-						println!("{}", sql);
 						sql
 					};
 					static ref PARAM_COUNT: usize = <<#name as #crate_name::db_model::DbModel>::DataCollector as #crate_name::db_model::DbModelDataCollector>::sql().3.len();
