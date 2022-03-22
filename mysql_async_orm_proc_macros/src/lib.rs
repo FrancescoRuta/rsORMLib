@@ -183,9 +183,10 @@ fn db_model_macro(input: &syn::DeriveInput) -> Result<proc_macro2::TokenStream> 
 					let old_value = Self::get_by_pk(*pk, connection).await?;
 					let mut query = ::std::string::String::new();
 					<Self as #crate_name::db_model::DbModel>::prepare_update(::std::option::Option::None, self, &old_value, &mut query, 0);
-					if ::std::cfg!(debug_asserts) {
+					if ::std::cfg!(debug_assertions) {
 						if let ::std::result::Result::Err(error) = connection.query_drop(&query).await {
 							println!("Error: {}\nIn: ```{}```", error, query);
+							return ::std::result::Result::Err(error);
 						}
 					} else {
 						connection.query_drop(query).await?;
@@ -199,9 +200,10 @@ fn db_model_macro(input: &syn::DeriveInput) -> Result<proc_macro2::TokenStream> 
 				let old_value = Self::get_by_pk(#pk_name_ident, connection).await?;
 				let mut query = ::std::string::String::new();
 				<Self as #crate_name::db_model::DbModel>::prepare_delete(::std::option::Option::None, &old_value, &mut query, 0);
-				if ::std::cfg!(debug_asserts) {
+				if ::std::cfg!(debug_assertions) {
 					if let ::std::result::Result::Err(error) = connection.query_drop(&query).await {
 						println!("Error: {}\nIn: ```{}```", error, query);
+						return ::std::result::Result::Err(error);
 					}
 				} else {
 					connection.query_drop(query).await?;
@@ -213,7 +215,7 @@ fn db_model_macro(input: &syn::DeriveInput) -> Result<proc_macro2::TokenStream> 
 					let mut query = ::std::string::String::new();
 					<Self as #crate_name::db_model::DbModel>::prepare_insert(::std::option::Option::None, self, &mut query, 0);
 					query.push_str("SELECT @id_1;");
-					let mut res = if ::std::cfg!(debug_asserts) {
+					let mut res = if ::std::cfg!(debug_assertions) {
 						match connection.query_iter(&query).await {
 							::std::result::Result::Ok(res) => res,
 							::std::result::Result::Err(error) => {
