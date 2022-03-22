@@ -226,18 +226,28 @@ pub fn get_prepare_update(db_model: &into_db_model::DbModel) -> Result<proc_macr
 			}
 		}
 	}).collect();
-	Ok(quote! {
-		if let Some(pk) = new_data.#pk_rs_name {
-			let this_id = this_id + 1;
-			query.push_str(&::std::format!("SET @id_{}={};", this_id, pk));
-			query.push_str(#update_str_prefix);
-			#(#query_push_update_cols)*
-			if let Some(fk_db_name) = fk {
-				query.push_str(&::std::format!(#update_str_with_fk_suffix, fk_db_name, this_id - 1, this_id));
-			} else {
-				query.push_str(&::std::format!(#update_str_without_fk_suffix, this_id));
+	if query_push_update_cols.len() != 0 {
+		Ok(quote! {
+			if let Some(pk) = new_data.#pk_rs_name {
+				let this_id = this_id + 1;
+				query.push_str(&::std::format!("SET @id_{}={};", this_id, pk));
+				query.push_str(#update_str_prefix);
+				#(#query_push_update_cols)*
+				if let Some(fk_db_name) = fk {
+					query.push_str(&::std::format!(#update_str_with_fk_suffix, fk_db_name, this_id - 1, this_id));
+				} else {
+					query.push_str(&::std::format!(#update_str_without_fk_suffix, this_id));
+				}
+				#(#relations)*
 			}
-			#(#relations)*
-		}
-	})
+		})
+	} else {
+		Ok(quote! {
+			if let Some(pk) = new_data.#pk_rs_name {
+				let this_id = this_id + 1;
+				query.push_str(&::std::format!("SET @id_{}={};", this_id, pk));
+				#(#relations)*
+			}
+		})
+	}
 }
