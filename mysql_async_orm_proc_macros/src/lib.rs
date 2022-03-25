@@ -179,30 +179,54 @@ fn db_model_macro(input: &syn::DeriveInput) -> Result<proc_macro2::TokenStream> 
 				data.next().ok_or(#crate_name::db_connection::DbError::Other(::std::borrow::Cow::Borrowed("Not found")))
 			}
 			pub async fn exec_update(&self, connection: &mut #crate_name::db_connection::DbConnection) -> ::std::result::Result<Self, #crate_name::db_connection::DbError> {
-				if let Some(pk) = &self.#pk_name_ident {
+				if let ::std::option::Option::Some(pk) = &self.#pk_name_ident {
 					let old_value = Self::get_by_pk(*pk, connection).await?;
-					let mut query = String::new();
+					let mut query = ::std::string::String::new();
 					<Self as #crate_name::db_model::DbModel>::prepare_update(::std::option::Option::None, self, &old_value, &mut query, 0);
-					connection.query_drop(query).await?;
-					Ok(old_value)
+					if ::std::cfg!(debug_assertions) {
+						if let ::std::result::Result::Err(error) = connection.query_drop(&query).await {
+							println!("Error: {}\nIn: ```{}```", error, query);
+							return ::std::result::Result::Err(error);
+						}
+					} else {
+						connection.query_drop(query).await?;
+					}
+					::std::result::Result::Ok(old_value)
 				} else {
 					::std::result::Result::Err(#crate_name::db_connection::DbError::Other(::std::borrow::Cow::Borrowed("Pk must be Some")))
 				}
 			}
 			pub async fn exec_delete(#pk_name_ident: #pk_inner_type, connection: &mut #crate_name::db_connection::DbConnection) -> ::std::result::Result<Self, #crate_name::db_connection::DbError> {
 				let old_value = Self::get_by_pk(#pk_name_ident, connection).await?;
-				let mut query = String::new();
+				let mut query = ::std::string::String::new();
 				<Self as #crate_name::db_model::DbModel>::prepare_delete(::std::option::Option::None, &old_value, &mut query, 0);
-				connection.query_drop(query).await?;
+				if ::std::cfg!(debug_assertions) {
+					if let ::std::result::Result::Err(error) = connection.query_drop(&query).await {
+						println!("Error: {}\nIn: ```{}```", error, query);
+						return ::std::result::Result::Err(error);
+					}
+				} else {
+					connection.query_drop(query).await?;
+				}
 				Ok(old_value)
 			}
 			pub async fn exec_insert(&self, connection: &mut #crate_name::db_connection::DbConnection) -> ::std::result::Result<#pk_inner_type, #crate_name::db_connection::DbError> {
 				if self.#pk_name_ident.is_none() {
-					let mut query = String::new();
+					let mut query = ::std::string::String::new();
 					<Self as #crate_name::db_model::DbModel>::prepare_insert(::std::option::Option::None, self, &mut query, 0);
 					query.push_str("SELECT @id_1;");
-					let mut res = connection.query_iter(query).await?;
-					let mut last_row = None;
+					let mut res = if ::std::cfg!(debug_assertions) {
+						match connection.query_iter(&query).await {
+							::std::result::Result::Ok(res) => res,
+							::std::result::Result::Err(error) => {
+								println!("Error: {}\nIn: ```{}```", error, query);
+								return ::std::result::Result::Err(error);
+							}
+						}
+					} else {
+						connection.query_iter(query).await?
+					};
+					let mut last_row = ::std::option::Option::None;
 					while !res.is_empty() {
 						res.for_each(|row| last_row = Some(row)).await?;
 					}
