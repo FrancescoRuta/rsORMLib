@@ -299,3 +299,44 @@ pub fn db_model(input: proc_macro::TokenStream) -> proc_macro::TokenStream {
 	let input = syn::parse_macro_input!(input as syn::DeriveInput);
 	db_model_macro(&input).unwrap_or_else(syn::Error::into_compile_error).into()
 }
+
+fn sql_order_by_macro(input: proc_macro::TokenStream) -> Result<proc_macro2::TokenStream> {
+	struct SqlOrderByInput(syn::Ident, syn::Token![,], Array, syn::Token![,], syn::Expr, syn::Token![,], syn::Expr, Option<syn::Token![,]>);
+	impl syn::parse::Parse for SqlOrderByInput {
+		fn parse(input: syn::parse::ParseStream) -> Result<Self> {
+			Ok(Self(input.parse()?, input.parse()?, input.parse()?, input.parse()?, input.parse()?, input.parse()?, input.parse()?, input.parse()?))
+		}
+	}
+	struct Array(syn::punctuated::Punctuated<syn::LitStr, syn::Token![,]>);
+	impl syn::parse::Parse for Array {
+		fn parse(input: syn::parse::ParseStream) -> Result<Self> {
+			let content;
+			let _ = syn::bracketed!(content in input);
+			Ok(Self(syn::punctuated::Punctuated::parse_terminated(&content)?))
+		}
+	}
+	let SqlOrderByInput(order_by_var, _, cols, _, sql_prefix, _, sql_suffix, _) = syn::parse(input)?;
+	let cols = cols.0.into_iter().enumerate().map(|(index, col)| {
+		let col = col.value();
+		let index_1 = index * 2 + 1;
+		let index_2 = index * 2 + 2;
+		let order_by_1 = format!(" ORDER BY {} ASC ", col);
+		let order_by_2 = format!(" ORDER BY {} DESC ", col);
+		quote! {
+			#index_1 => Ok(concat!(#sql_prefix, #order_by_1, #sql_suffix)),
+			#index_2 => Ok(concat!(#sql_prefix, #order_by_2, #sql_suffix)),
+		}
+	});
+	Ok((quote! {
+		match #order_by_var {
+			0 => Ok(concat!(#sql_prefix, #sql_suffix)),
+			#(#cols)*
+			_ => Err(()),
+		}
+	}).into())
+}
+
+#[proc_macro]
+pub fn sql_order_by(input: proc_macro::TokenStream) -> proc_macro::TokenStream {
+	sql_order_by_macro(input).unwrap_or_else(syn::Error::into_compile_error).into()
+}
