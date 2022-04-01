@@ -5,7 +5,8 @@ use mysql_async_orm::{db_connection::DbConnectionPool, DbModel};
 pub struct Articolo {
 	#[pk]
 	id: Option<usize>,
-	#[from("unita_misura")]
+	#[from(expression = "articoli.unita_misura")]
+	#[readonly]
 	unita_di_misura: u8,
 	classificazione: i32,
 	codice: String,
@@ -20,7 +21,6 @@ pub struct Articolo {
 	altezza: f64,
 	larghezza: f64,
 	profondita: f64,
-	peso: f64,
 	colli_per_bancale: i32,
 	pezzi_per_blister: i32,
 	formato_flacone: f64,

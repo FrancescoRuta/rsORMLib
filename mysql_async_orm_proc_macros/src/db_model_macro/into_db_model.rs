@@ -118,6 +118,9 @@ pub fn get_db_model<'a>(input: &'a syn::DeriveInput, struct_attributes: &HashMap
 					if from_attribute.named_arrs.get("table").is_some() {
 						return Err(syn::Error::new(rs_name_ident.span(), "Columns from other tables must be readonly"));
 					}
+					if from_attribute.named_arrs.get("expression").is_some() {
+						return Err(syn::Error::new(rs_name_ident.span(), "Expressions must be readonly"));
+					}
 				}
 			}
 			columns_except_pk.push(DbColumn {

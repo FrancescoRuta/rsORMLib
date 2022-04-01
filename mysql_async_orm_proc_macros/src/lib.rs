@@ -50,12 +50,17 @@ fn db_model_macro(input: &syn::DeriveInput) -> Result<proc_macro2::TokenStream> 
 			} else {
 				default_column_name.to_string()
 			};
+			let expression = from.named_arrs.remove("expression");
 			let table = if let Some(table) = from.named_arrs.get("table") {
 				table
 			} else {
 				&db_model.from.table
 			};
-			format!("{}.{}", table, column_name)
+			if let Some(expression) = expression {
+				expression
+			} else {
+				format!("{}.{}", table, column_name)
+			}
 		} else {
 			format!("{}.{}", db_model.from.table, default_column_name)
 		}
