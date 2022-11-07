@@ -179,9 +179,9 @@ fn db_model_macro(input: &syn::DeriveInput) -> Result<proc_macro2::TokenStream> 
 				}
 				let params: ::std::vec::Vec<_> = (0..*PARAM_COUNT).map(|_| pk).collect();
 				let sql: &str = &*SQL;
-				let mut data = Self::vec_from_rows(connection.exec(sql, params).await?);
+				let mut data = Self::vec_from_rows(connection.exec(sql, &params).await?);
 				let mut data = data.drain(..);
-				data.next().ok_or(#crate_name::db_connection::DbError::Other(::std::borrow::Cow::Borrowed("Not found")))
+				data.next().ok_or(#crate_name::db_connection::DbError::Other(::std::borrow::Cow::Owned(::std::format!("Not found. SQL: {}\nPARAMS: {:#?}", sql, params))))
 			}
 			pub async fn exec_update(&self, connection: &mut impl #crate_name::db_connection::QueryableConn) -> ::std::result::Result<Self, #crate_name::db_connection::DbError> {
 				if let ::std::option::Option::Some(pk) = &self.#pk_name_ident {
