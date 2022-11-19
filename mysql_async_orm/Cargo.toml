@@ -5,5 +5,5 @@ edition = "2021"
 
 [dependencies]
 mysql_async_orm_proc_macros = { path = "../mysql_async_orm_proc_macros" }
-mysql_async = "0.29"
+mysql_async = "0.31"
 lazy_static = "1.4"

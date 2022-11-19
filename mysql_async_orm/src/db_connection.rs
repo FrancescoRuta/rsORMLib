@@ -1,7 +1,7 @@
 use std::{future::Future, pin::Pin};
 
 use mysql_async::{
-	prelude::{FromRow, Queryable, StatementLike},
+	prelude::{FromRow, Queryable, StatementLike, AsQuery},
 	TxOpts,
 };
 
@@ -62,28 +62,28 @@ impl DbConnection {
 		})
 	}
 
-	pub async fn query<Q: AsRef<str> + Send + Sync, R: FromRow + Send + 'static>(
+	pub async fn query<Q: AsQuery + Send + Sync, R: FromRow + Send + 'static>(
 		&mut self,
 		query: Q,
 	) -> Result<Vec<R>, DbError> {
 		self.conn.query(query).await
 	}
 
-	pub async fn query_first<Q: AsRef<str> + Send + Sync, R: FromRow + Send + 'static>(
+	pub async fn query_first<Q: AsQuery + Send + Sync, R: FromRow + Send + 'static>(
 		&mut self,
 		query: Q,
 	) -> Result<Option<R>, DbError> {
 		self.conn.query_first(query).await
 	}
 
-	pub async fn query_iter<'a, Q: AsRef<str> + Send + Sync + 'a>(
+	pub async fn query_iter<'a, Q: AsQuery + Send + Sync + 'a>(
 		&'a mut self,
 		query: Q,
 	) -> Result<mysql_async::QueryResult<'a, 'static, mysql_async::TextProtocol>, DbError> {
 		self.conn.query_iter(query).await
 	}
 
-	pub async fn query_drop<Q: AsRef<str> + Send + Sync>(
+	pub async fn query_drop<Q: AsQuery + Send + Sync>(
 		&mut self,
 		query: Q,
 	) -> Result<(), DbError> {
@@ -142,28 +142,28 @@ impl DbConnection {
 
 impl DbTransaction<'_> {
 	
-	pub async fn query<Q: AsRef<str> + Send + Sync, R: FromRow + Send + 'static>(
+	pub async fn query<Q: AsQuery + Send + Sync, R: FromRow + Send + 'static>(
 		&mut self,
 		query: Q,
 	) -> Result<Vec<R>, DbError> {
 		self.conn.query(query).await
 	}
 
-	pub async fn query_first<Q: AsRef<str> + Send + Sync, R: FromRow + Send + 'static>(
+	pub async fn query_first<Q: AsQuery + Send + Sync, R: FromRow + Send + 'static>(
 		&mut self,
 		query: Q,
 	) -> Result<Option<R>, DbError> {
 		self.conn.query_first(query).await
 	}
 
-	pub async fn query_iter<'a, Q: AsRef<str> + Send + Sync + 'a>(
+	pub async fn query_iter<'a, Q: AsQuery + Send + Sync + 'a>(
 		&'a mut self,
 		query: Q,
 	) -> Result<mysql_async::QueryResult<'a, 'static, mysql_async::TextProtocol>, DbError> {
 		self.conn.query_iter(query).await
 	}
 
-	pub async fn query_drop<Q: AsRef<str> + Send + Sync>(
+	pub async fn query_drop<Q: AsQuery + Send + Sync>(
 		&mut self,
 		query: Q,
 	) -> Result<(), DbError> {
@@ -225,19 +225,19 @@ type BoxFuture<'a, T> = Pin<Box<dyn Future<Output = Result<T, DbError>> + Send +
 pub trait QueryableConn {
 	fn query<'a, Q, R>(&'a mut self, query: Q) -> BoxFuture<'a, Vec<R>>
 	where
-		Q: AsRef<str> + Send + Sync + 'a,
+		Q: AsQuery + Send + Sync + 'a,
 		R: FromRow + Send + 'static;
 	fn query_first<'a, Q, R>(&'a mut self, query: Q) -> BoxFuture<Option<R>>
 	where
-		Q: AsRef<str> + Send + Sync + 'a,
+		Q: AsQuery + Send + Sync + 'a,
 		R: FromRow + Send + 'static;
-	fn query_iter<'a, Q: AsRef<str> + Send + Sync + 'a>(
+	fn query_iter<'a, Q: AsQuery + Send + Sync + 'a>(
 		&'a mut self,
 		query: Q,
 	) -> BoxFuture<mysql_async::QueryResult<'a, 'static, mysql_async::TextProtocol>>;
 	fn query_drop<'a, Q>(&'a mut self, query: Q) -> BoxFuture<'a, ()>
 	where
-		Q: AsRef<str> + Send + Sync + 'a;
+		Q: AsQuery + Send + Sync + 'a;
 	fn exec<'a, S, P, R>(&'a mut self, stmt: S, params: P) -> BoxFuture<'a, Vec<R>>
 	where
 		S: StatementLike + 'a,
@@ -264,7 +264,7 @@ pub trait QueryableConn {
 impl QueryableConn for DbConnection {
 	fn query<'a, Q, R>(&'a mut self, query: Q) -> BoxFuture<'a, Vec<R>>
 	where
-		Q: AsRef<str> + Send + Sync + 'a,
+		Q: AsQuery + Send + Sync + 'a,
 		R: FromRow + Send + 'static,
 	{
 		self.conn.query(query)
@@ -272,13 +272,13 @@ impl QueryableConn for DbConnection {
 
 	fn query_first<'a, Q, R>(&'a mut self, query: Q) -> BoxFuture<Option<R>>
 	where
-		Q: AsRef<str> + Send + Sync + 'a,
+		Q: AsQuery + Send + Sync + 'a,
 		R: FromRow + Send + 'static,
 	{
 		self.conn.query_first(query)
 	}
 
-	fn query_iter<'a, Q: AsRef<str> + Send + Sync + 'a>(
+	fn query_iter<'a, Q: AsQuery + Send + Sync + 'a>(
 		&'a mut self,
 		query: Q,
 	) -> BoxFuture<mysql_async::QueryResult<'a, 'static, mysql_async::TextProtocol>> {
@@ -287,7 +287,7 @@ impl QueryableConn for DbConnection {
 
 	fn query_drop<'a, Q>(&'a mut self, query: Q) -> BoxFuture<'a, ()>
 	where
-		Q: AsRef<str> + Send + Sync + 'a,
+		Q: AsQuery + Send + Sync + 'a,
 	{
 		self.conn.query_drop(query)
 	}
@@ -336,7 +336,7 @@ impl QueryableConn for DbConnection {
 impl QueryableConn for DbTransaction<'_> {
 	fn query<'a, Q, R>(&'a mut self, query: Q) -> BoxFuture<'a, Vec<R>>
 	where
-		Q: AsRef<str> + Send + Sync + 'a,
+		Q: AsQuery + Send + Sync + 'a,
 		R: FromRow + Send + 'static,
 	{
 		self.conn.query(query)
@@ -344,13 +344,13 @@ impl QueryableConn for DbTransaction<'_> {
 
 	fn query_first<'a, Q, R>(&'a mut self, query: Q) -> BoxFuture<Option<R>>
 	where
-		Q: AsRef<str> + Send + Sync + 'a,
+		Q: AsQuery + Send + Sync + 'a,
 		R: FromRow + Send + 'static,
 	{
 		self.conn.query_first(query)
 	}
 
-	fn query_iter<'a, Q: AsRef<str> + Send + Sync + 'a>(
+	fn query_iter<'a, Q: AsQuery + Send + Sync + 'a>(
 		&'a mut self,
 		query: Q,
 	) -> BoxFuture<mysql_async::QueryResult<'a, 'static, mysql_async::TextProtocol>> {
@@ -359,7 +359,7 @@ impl QueryableConn for DbTransaction<'_> {
 
 	fn query_drop<'a, Q>(&'a mut self, query: Q) -> BoxFuture<'a, ()>
 	where
-		Q: AsRef<str> + Send + Sync + 'a,
+		Q: AsQuery + Send + Sync + 'a,
 	{
 		self.conn.query_drop(query)
 	}

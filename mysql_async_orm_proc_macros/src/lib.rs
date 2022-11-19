@@ -181,7 +181,7 @@ fn db_model_macro(input: &syn::DeriveInput) -> Result<proc_macro2::TokenStream> 
 				let sql: &str = &*SQL;
 				let mut data = Self::vec_from_rows(connection.exec(sql, &params).await?);
 				let mut data = data.drain(..);
-				data.next().ok_or(#crate_name::db_connection::DbError::Other(::std::borrow::Cow::Owned(::std::format!("Not found. SQL: {}\nPARAMS: {:#?}", sql, params))))
+				data.next().ok_or_else(|| #crate_name::db_connection::DbError::Other(::std::format!("Not found. SQL: {}\nPARAMS: {:#?}", sql, params).into()))
 			}
 			pub async fn exec_update(&self, connection: &mut impl #crate_name::db_connection::QueryableConn) -> ::std::result::Result<Self, #crate_name::db_connection::DbError> {
 				if let ::std::option::Option::Some(pk) = &self.#pk_name_ident {
@@ -198,7 +198,7 @@ fn db_model_macro(input: &syn::DeriveInput) -> Result<proc_macro2::TokenStream> 
 					}
 					::std::result::Result::Ok(old_value)
 				} else {
-					::std::result::Result::Err(#crate_name::db_connection::DbError::Other(::std::borrow::Cow::Borrowed("Pk must be Some")))
+					::std::result::Result::Err(#crate_name::db_connection::DbError::Other("Pk must be Some".into()))
 				}
 			}
 			pub async fn exec_delete(#pk_name_ident: #pk_inner_type, connection: &mut impl #crate_name::db_connection::QueryableConn) -> ::std::result::Result<Self, #crate_name::db_connection::DbError> {
@@ -235,10 +235,10 @@ fn db_model_macro(input: &syn::DeriveInput) -> Result<proc_macro2::TokenStream> 
 					while !res.is_empty() {
 						res.for_each(|row| last_row = Some(row)).await?;
 					}
-					let mut last_row = last_row.ok_or(#crate_name::db_connection::DbError::Other(::std::borrow::Cow::Borrowed("Unknown error")))?;
-					last_row.take(0).ok_or(#crate_name::db_connection::DbError::Other(::std::borrow::Cow::Borrowed("Unknown error")))
+					let mut last_row = last_row.ok_or_else(|| #crate_name::db_connection::DbError::Other("Unknown error".into()))?;
+					last_row.take(0).ok_or_else(|| #crate_name::db_connection::DbError::Other("Unknown error".into()))
 				} else {
-					::std::result::Result::Err(#crate_name::db_connection::DbError::Other(::std::borrow::Cow::Borrowed("Pk must be None")))
+					::std::result::Result::Err(#crate_name::db_connection::DbError::Other("Pk must be None".into()))
 				}
 			}
 		}
