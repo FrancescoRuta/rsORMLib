@@ -47,3 +47,22 @@ pub struct BillOfMaterialsItem {
 	description: String,
 }
 ```
+
+
+```rs
+
+...
+
+let item = Item::get_by_pk(id, &mut conn).await?
+
+...
+
+let insert_id = item.exec_insert(&mut conn).await?;
+
+...
+
+let updated_item: Item = item.exec_update(&mut conn).await?;
+
+...
+
+```
