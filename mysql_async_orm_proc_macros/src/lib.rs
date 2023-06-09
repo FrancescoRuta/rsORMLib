@@ -330,10 +330,10 @@ pub fn db_model(input: proc_macro::TokenStream) -> proc_macro::TokenStream {
 }
 
 fn sql_order_by_macro(input: proc_macro::TokenStream) -> Result<proc_macro2::TokenStream> {
-	struct SqlOrderByInput(syn::Ident, syn::Token![,], Array, syn::Token![,], syn::Expr, syn::Token![,], syn::Expr, Option<syn::Token![,]>);
+	struct SqlOrderByInput(syn::Ident, syn::Token![,], Array, syn::Token![,], syn::Expr, syn::Token![,], syn::Expr, syn::Token![,], syn::LitStr, Option<syn::Token![,]>);
 	impl syn::parse::Parse for SqlOrderByInput {
 		fn parse(input: syn::parse::ParseStream) -> Result<Self> {
-			Ok(Self(input.parse()?, input.parse()?, input.parse()?, input.parse()?, input.parse()?, input.parse()?, input.parse()?, input.parse()?))
+			Ok(Self(input.parse()?, input.parse()?, input.parse()?, input.parse()?, input.parse()?, input.parse()?, input.parse()?, input.parse()?, input.parse()?, input.parse()?))
 		}
 	}
 	struct Array(syn::punctuated::Punctuated<syn::LitStr, syn::Token![,]>);
@@ -344,7 +344,13 @@ fn sql_order_by_macro(input: proc_macro::TokenStream) -> Result<proc_macro2::Tok
 			Ok(Self(syn::punctuated::Punctuated::parse_terminated(&content)?))
 		}
 	}
-	let SqlOrderByInput(order_by_var, _, cols, _, sql_prefix, _, sql_suffix, _) = syn::parse(input)?;
+	let SqlOrderByInput(order_by_var, _, cols, _, sql_prefix, _, sql_suffix, _, default_order_by_suffix, _) = syn::parse(input)?;
+	let default_order_by_suffix = default_order_by_suffix.value();
+	let default_order_by_suffix = if default_order_by_suffix != "" {
+		format!(" ORDER BY {default_order_by_suffix} ")
+	} else {
+		"".into()
+	};
 	let cols = cols.0.into_iter().enumerate().map(|(index, col)| {
 		let col = col.value();
 		let index_1 = index * 2 + 1;
@@ -358,7 +364,7 @@ fn sql_order_by_macro(input: proc_macro::TokenStream) -> Result<proc_macro2::Tok
 	});
 	Ok((quote! {
 		match #order_by_var {
-			0 => Ok(concat!(#sql_prefix, #sql_suffix)),
+			0 => Ok(concat!(#sql_prefix, #default_order_by_suffix, #sql_suffix)),
 			#(#cols)*
 			_ => Err(()),
 		}
