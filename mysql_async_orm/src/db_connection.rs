@@ -138,6 +138,10 @@ impl DbConnection {
 	pub fn last_insert_id(&self) -> Option<u64> {
 		self.conn.last_insert_id()
 	}
+	
+	pub fn affected_rows(&self) -> u64 {
+		self.conn.affected_rows()
+	}
 }
 
 impl DbTransaction<'_> {
@@ -218,6 +222,10 @@ impl DbTransaction<'_> {
 	pub fn last_insert_id(&self) -> Option<u64> {
 		self.conn.last_insert_id()
 	}
+	
+	pub fn affected_rows(&self) -> u64 {
+		self.conn.affected_rows()
+	}
 }
 
 type BoxFuture<'a, T> = Pin<Box<dyn Future<Output = Result<T, DbError>> + Send + 'a>>;
@@ -259,6 +267,7 @@ pub trait QueryableConn {
 		I::IntoIter: Send,
 		P: Into<mysql_async::Params> + Send;
 	fn last_insert_id(&self) -> Option<u64>;
+	fn affected_rows(&self) -> u64;
 }
 
 impl QueryableConn for DbConnection {
@@ -331,6 +340,10 @@ impl QueryableConn for DbConnection {
 	fn last_insert_id(&self) -> Option<u64> {
 		self.conn.last_insert_id()
 	}
+	
+	fn affected_rows(&self) -> u64 {
+		self.conn.affected_rows()
+	}
 }
 
 impl QueryableConn for DbTransaction<'_> {
@@ -402,5 +415,9 @@ impl QueryableConn for DbTransaction<'_> {
 	
 	fn last_insert_id(&self) -> Option<u64> {
 		self.conn.last_insert_id()
+	}
+	
+	fn affected_rows(&self) -> u64 {
+		self.conn.affected_rows()
 	}
 }
