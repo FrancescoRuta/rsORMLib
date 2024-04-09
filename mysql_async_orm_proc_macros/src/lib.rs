@@ -44,7 +44,7 @@ fn db_model_macro(input: &syn::DeriveInput) -> Result<proc_macro2::TokenStream> 
 		if let Some(from) = &f.from_attribute {
 			let mut from = from.clone();
 			let column_name = if let Some(column_name) = from.named_arrs.remove("column") {
-				column_name
+				column_name.0
 			} else if let Some(column_name) = from.attr {
 				column_name
 			} else {
@@ -52,12 +52,12 @@ fn db_model_macro(input: &syn::DeriveInput) -> Result<proc_macro2::TokenStream> 
 			};
 			let expression = from.named_arrs.remove("expression");
 			let table = if let Some(table) = from.named_arrs.get("table") {
-				table
+				&table.0
 			} else {
 				&db_model.from.table
 			};
 			if let Some(expression) = expression {
-				expression
+				expression.0
 			} else {
 				format!("{}.{}", table, column_name)
 			}
@@ -330,7 +330,7 @@ pub fn db_model(input: proc_macro::TokenStream) -> proc_macro::TokenStream {
 }
 
 fn sql_order_by_macro(input: proc_macro::TokenStream) -> Result<proc_macro2::TokenStream> {
-	struct SqlOrderByInput(syn::Ident, syn::Token![,], Array, syn::Token![,], syn::Expr, syn::Token![,], syn::Expr, syn::Token![,], syn::LitStr, Option<syn::Token![,]>);
+	struct SqlOrderByInput(syn::Ident, #[allow(dead_code)] syn::Token![,], Array, #[allow(dead_code)] syn::Token![,], syn::Expr, #[allow(dead_code)] syn::Token![,], syn::Expr, #[allow(dead_code)] syn::Token![,], syn::LitStr, #[allow(dead_code)] Option<syn::Token![,]>);
 	impl syn::parse::Parse for SqlOrderByInput {
 		fn parse(input: syn::parse::ParseStream) -> Result<Self> {
 			Ok(Self(input.parse()?, input.parse()?, input.parse()?, input.parse()?, input.parse()?, input.parse()?, input.parse()?, input.parse()?, input.parse()?, input.parse()?))

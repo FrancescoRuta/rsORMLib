@@ -1,6 +1,6 @@
 use std::collections::HashMap;
 
-use syn::{Result, spanned::Spanned};
+use syn::{punctuated::Punctuated, spanned::Spanned, Result};
 
 use crate::db_model_parse::{FromAttribute, RelationAttribute};
 
@@ -19,12 +19,33 @@ fn get_table_from<'a>(input: &'a syn::DeriveInput, struct_attributes: &HashMap<S
 	let mut struct_from_attribute: FromAttribute = syn::parse(struct_from.tokens.clone().into())?;
 	let from = struct_from_attribute.attr.ok_or(syn::Error::new(struct_from.span(), "A db table must have a from string"))?;
 	let table = if let Some(table) = struct_from_attribute.named_arrs.remove("table") {
-		table
+		table.0
 	} else {
 		from.clone()
 	};
-	let joins = if let Some(joins) = struct_from_attribute.named_arrs.remove("joins") {
-		format!(" {}", joins)
+	let joins = if let Some((joins, span)) = struct_from_attribute.named_arrs.remove("joins") {
+		let mut res = String::new();
+		let joins: proc_macro2::TokenStream = joins.parse().map_err(|_| syn::Error::new(span, "joins invalid syntax"))?;
+		struct Joins(Punctuated<Join, syn::Token![,]>);
+		impl syn::parse::Parse for Joins {
+			fn parse(input: syn::parse::ParseStream) -> Result<Self> {
+				Ok(Self(Punctuated::parse_terminated(input)?))
+			}
+		}
+		struct Join(syn::Ident, syn::Ident, syn::LitStr);
+		impl syn::parse::Parse for Join {
+			fn parse(input: syn::parse::ParseStream) -> Result<Self> {
+				Ok(Self(input.parse()?, input.parse()?, input.parse()?))
+			}
+		}
+		let joins: Joins = syn::parse2(joins).map_err(|e| syn::Error::new(span, e.to_string()))?;
+		for Join(tbl, alias, on) in joins.0 {
+			let tbl = tbl.to_string();
+			let alias = alias.to_string();
+			let on = on.value();
+			res.push_str(&format!(" LEFT JOIN {tbl} {alias} ON {on}"));
+		}
+		res
 	} else {
 		"".to_string()
 	};

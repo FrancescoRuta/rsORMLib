@@ -50,9 +50,9 @@ pub struct DistintaBase {
 	#[relation("id_formula")]
 	articoli: Vec<ArticoloDistintaBase>,
 }
-
+//joins = [articoli articolo_distinta on "produzione__distinta_base.id_articolo=articolo_distinta.id"]
 #[derive(DbModel, Debug)]
-#[from("produzione__distinta_base", joins = "LEFT JOIN articoli articolo_distinta ON produzione__distinta_base.id_articolo=articolo_distinta.id LEFT JOIN unita_di_misura unita_di_misura_articolo_distinta ON articolo_distinta.unita_misura=unita_di_misura_articolo_distinta.id")]
+#[from("produzione__distinta_base", joins = r#"articoli articolo_distinta "produzione__distinta_base.id_articolo=articolo_distinta.id", unita_di_misura unita_di_misura_articolo_distinta "articolo_distinta.unita_misura=unita_di_misura_articolo_distinta.id""#)]
 pub struct ArticoloDistintaBase {
 	#[pk]
 	id: Option<usize>,

@@ -1,10 +1,11 @@
 use std::collections::HashMap;
+use proc_macro2::Span;
 use syn::parse::Parse;
 
 #[derive(Clone)]
 pub struct FromAttribute {
 	pub attr: Option<String>,
-	pub named_arrs: HashMap<String, String>,
+	pub named_arrs: HashMap<String, (String, Span)>,
 }
 
 pub struct RelationAttribute {
@@ -36,7 +37,7 @@ impl Parse for FromAttribute {
 		};
 		let mut named_arrs = HashMap::new();
 		for attr in named_arrs_punct {
-			named_arrs.insert(attr.name.to_string(), attr.value.value());
+			named_arrs.insert(attr.name.to_string(), (attr.value.value(), attr.value.span()));
 		}
 		Ok(FromAttribute {
 			attr,
