@@ -5,6 +5,7 @@ use mysql_async::{
 	TxOpts,
 };
 
+#[derive(Clone)]
 pub struct DbConnectionPool {
 	pool: mysql_async::Pool,
 }
