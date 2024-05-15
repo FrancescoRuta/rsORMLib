@@ -102,6 +102,22 @@ impl DbConnection {
 	) -> Result<Vec<R>, DbError> {
 		self.conn.exec(stmt, params).await
 	}
+	
+	pub fn exec_map<'a: 'b, 'b, T, S, P, U, F>(
+        &'a mut self,
+        stmt: S,
+        params: P,
+        f: F,
+    ) -> BoxFuture<'b, Vec<U>>
+    where
+        S: StatementLike + 'b,
+        P: Into<mysql_async::Params> + Send + 'b,
+        T: FromRow + Send + 'static,
+        F: FnMut(T) -> U + Send + 'a,
+        U: Send + 'a,
+    {
+        self.conn.exec_map(stmt, params, f)
+    }
 
 	pub async fn exec_first<
 		S: StatementLike,
@@ -186,6 +202,22 @@ impl DbTransaction<'_> {
 	) -> Result<Vec<R>, DbError> {
 		self.conn.exec(stmt, params).await
 	}
+	
+	pub fn exec_map<'a: 'b, 'b, T, S, P, U, F>(
+        &'a mut self,
+        stmt: S,
+        params: P,
+        f: F,
+    ) -> BoxFuture<'b, Vec<U>>
+    where
+        S: StatementLike + 'b,
+        P: Into<mysql_async::Params> + Send + 'b,
+        T: FromRow + Send + 'static,
+        F: FnMut(T) -> U + Send + 'a,
+        U: Send + 'a,
+    {
+        self.conn.exec_map(stmt, params, f)
+    }
 
 	pub async fn exec_first<
 		S: StatementLike,
@@ -252,6 +284,18 @@ pub trait QueryableConn {
 		S: StatementLike + 'a,
 		P: Into<mysql_async::Params> + Send + 'a,
 		R: FromRow + Send + 'static;
+	fn exec_map<'a: 'b, 'b, T, S, P, U, F>(
+		&'a mut self,
+		stmt: S,
+		params: P,
+		f: F,
+	) -> BoxFuture<'b, Vec<U>>
+	where
+		S: StatementLike + 'b,
+		P: Into<mysql_async::Params> + Send + 'b,
+		T: FromRow + Send + 'static,
+		F: FnMut(T) -> U + Send + 'a,
+		U: Send + 'a;
 	fn exec_first<'a, S, P, R>(&'a mut self, stmt: S, params: P) -> BoxFuture<'a, Option<R>>
 	where
 		S: StatementLike + 'a,
@@ -309,6 +353,22 @@ impl QueryableConn for DbConnection {
 		R: FromRow + Send + 'static,
 	{
 		self.conn.exec(stmt, params)
+	}
+	
+	fn exec_map<'a: 'b, 'b, T, S, P, U, F>(
+		&'a mut self,
+		stmt: S,
+		params: P,
+		f: F,
+	) -> BoxFuture<'b, Vec<U>>
+	where
+		S: StatementLike + 'b,
+		P: Into<mysql_async::Params> + Send + 'b,
+		T: FromRow + Send + 'static,
+		F: FnMut(T) -> U + Send + 'a,
+		U: Send + 'a,
+	{
+		self.conn.exec_map(stmt, params, f)
 	}
 
 	fn exec_first<'a, S, P, R>(&'a mut self, stmt: S, params: P) -> BoxFuture<'a, Option<R>>
@@ -385,6 +445,22 @@ impl QueryableConn for DbTransaction<'_> {
 		R: FromRow + Send + 'static,
 	{
 		self.conn.exec(stmt, params)
+	}
+	
+	fn exec_map<'a: 'b, 'b, T, S, P, U, F>(
+		&'a mut self,
+		stmt: S,
+		params: P,
+		f: F,
+	) -> BoxFuture<'b, Vec<U>>
+	where
+		S: StatementLike + 'b,
+		P: Into<mysql_async::Params> + Send + 'b,
+		T: FromRow + Send + 'static,
+		F: FnMut(T) -> U + Send + 'a,
+		U: Send + 'a,
+	{
+		self.conn.exec_map(stmt, params, f)
 	}
 
 	fn exec_first<'a, S, P, R>(&'a mut self, stmt: S, params: P) -> BoxFuture<'a, Option<R>>
