@@ -7,6 +7,21 @@ mod db_model_macro;
 const CRATE_NAME: &'static str = "mysql_async_orm";
 
 
+#[derive(Clone)]
+struct CrateNameAttribute {
+	pub value: String,
+}
+impl syn::parse::Parse for CrateNameAttribute {
+	fn parse(input: syn::parse::ParseStream) -> syn::Result<Self> {
+		let content;
+		let _ = syn::parenthesized!(content in input);
+		let input: syn::LitStr = (&content).parse()?;
+		Ok(CrateNameAttribute {
+			value: input.value(),
+		})
+	}
+}
+
 fn generate_unique_ident(prefix: &str) -> syn::Ident {
     let uuid = uuid::Uuid::new_v4();
     let ident = format!("{}_{}", prefix, uuid).replace('-', "_");
@@ -26,9 +41,9 @@ fn db_model_macro(input: &syn::DeriveInput) -> Result<proc_macro2::TokenStream> 
 	let pk_db_string = format!("{}.{}", db_model.from.table, db_model.pk.db_name);
 	
 	let crate_name = if let Some(mysql_async_orm_crate_path) = struct_attributes.get("mysql_async_orm_crate_path") {
-		let crate_name: syn::LitStr = syn::parse(mysql_async_orm_crate_path.tokens.clone().into())?;
+		let crate_name: CrateNameAttribute = syn::parse(mysql_async_orm_crate_path.tokens.clone().into())?;
 		let mut segments = syn::punctuated::Punctuated::<syn::PathSegment, syn::token::Colon2>::new();
-		for p in crate_name.value().split("::") {
+		for p in crate_name.value.split("::") {
 			segments.push(syn::PathSegment { ident: syn::Ident::new(p, proc_macro2::Span::call_site()), arguments: syn::PathArguments::None });
 		}
 		syn::Path {
