@@ -14,8 +14,6 @@ fn generate_unique_ident(prefix: &str) -> syn::Ident {
 }
 
 fn db_model_macro(input: &syn::DeriveInput) -> Result<proc_macro2::TokenStream> {
-	let crate_name = syn::Ident::new(CRATE_NAME, proc_macro2::Span::call_site());
-	let crate_name = quote! { ::#crate_name };
 	let name = &input.ident;
 	let fields = db_model_macro::get_struct_fields(input)?;
 	let struct_attributes = db_model_macro::get_attributes(input.attrs.iter());
@@ -26,18 +24,27 @@ fn db_model_macro(input: &syn::DeriveInput) -> Result<proc_macro2::TokenStream> 
 	let pk_inner_type = db_model_macro::into_db_model::get_inner_type(pk_type)?;
 	let pk_name_ident = db_model.pk.rs_name_ident;
 	let pk_db_string = format!("{}.{}", db_model.from.table, db_model.pk.db_name);
-	let partial_data_fields = db_model_macro::get_partial_data_fields(&db_model.columns_except_pk, &db_model.relations)?;
-	let partial_data_init_collectors = db_model_macro::get_partial_data_init_collectors(&db_model.relations)?;
+	
+	let crate_name: syn::Path = if let Some(this_crate_path) = struct_attributes.get("this_crate_path") {
+		syn::parse(this_crate_path.tokens.clone().into())?
+	} else {
+		syn::Ident::new(CRATE_NAME, proc_macro2::Span::call_site()).into()
+	};
+	
+	let partial_data_fields = db_model_macro::get_partial_data_fields(&crate_name, &db_model.columns_except_pk, &db_model.relations)?;
+	let partial_data_init_collectors = db_model_macro::get_partial_data_init_collectors(&crate_name, &db_model.relations)?;
 	let partial_data_init = db_model_macro::get_partial_data_init(&db_model.columns_except_pk, &db_model.relations)?;
 	let partial_data_destruct = db_model_macro::get_partial_data_destruct(&db_model.columns_except_pk, &db_model.relations)?;
 	let partial_data_build = db_model_macro::get_partial_data_build(&db_model.columns_except_pk, &db_model.relations)?;
 	let push_next_sub = db_model_macro::get_push_next_sub(&db_model.relations)?;
 	let mod_name = generate_unique_ident("__db_rel");
-	let prepare_insert = db_model_macro::get_prepare_insert(&db_model)?;
-	let prepare_update = db_model_macro::get_prepare_update(&db_model)?;
-	let prepare_delete = db_model_macro::get_prepare_delete(&db_model)?;
+	let prepare_insert = db_model_macro::get_prepare_insert(&crate_name, &db_model)?;
+	let prepare_update = db_model_macro::get_prepare_update(&crate_name, &db_model)?;
+	let prepare_delete = db_model_macro::get_prepare_delete(&crate_name, &db_model)?;
 	
 	let get_by_pk_sql = format!("SELECT {{}} FROM {{}} {{}} WHERE {}=?", pk_db_string);
+	
+	let crate_name = quote! { ::#crate_name };
 	
 	let sql_names = [pk_db_string.clone()].into_iter().chain(db_model.columns_except_pk.iter().map(|f| {
 		let default_column_name = f.rs_name_ident;
@@ -323,7 +330,7 @@ fn db_model_macro(input: &syn::DeriveInput) -> Result<proc_macro2::TokenStream> 
 	Ok(res)
 }
 
-#[proc_macro_derive(DbModel, attributes(from, pk, relation, readonly))]
+#[proc_macro_derive(DbModel, attributes(from, pk, relation, readonly, this_crate_path))]
 pub fn db_model(input: proc_macro::TokenStream) -> proc_macro::TokenStream {
 	let input = syn::parse_macro_input!(input as syn::DeriveInput);
 	db_model_macro(&input).unwrap_or_else(syn::Error::into_compile_error).into()
