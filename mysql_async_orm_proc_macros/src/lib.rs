@@ -26,9 +26,22 @@ fn db_model_macro(input: &syn::DeriveInput) -> Result<proc_macro2::TokenStream> 
 	let pk_db_string = format!("{}.{}", db_model.from.table, db_model.pk.db_name);
 	
 	let crate_name = if let Some(mysql_async_orm_crate_path) = struct_attributes.get("mysql_async_orm_crate_path") {
-		syn::parse(mysql_async_orm_crate_path.tokens.clone().into())?
+		let crate_name: syn::LitStr = syn::parse(mysql_async_orm_crate_path.tokens.clone().into())?;
+		let mut segments = syn::punctuated::Punctuated::<syn::PathSegment, syn::token::Colon2>::new();
+		for p in crate_name.value().split("::") {
+			segments.push(syn::PathSegment { ident: syn::Ident::new(p, proc_macro2::Span::call_site()), arguments: syn::PathArguments::None });
+		}
+		syn::Path {
+			leading_colon: Some(syn::token::Colon2::default()),
+			segments,
+		}
 	} else {
-		syn::Path::from(syn::Ident::new(CRATE_NAME, proc_macro2::Span::call_site()))
+		let mut segments = syn::punctuated::Punctuated::<syn::PathSegment, syn::token::Colon2>::new();
+		segments.push(syn::PathSegment { ident: syn::Ident::new(CRATE_NAME, proc_macro2::Span::call_site()), arguments: syn::PathArguments::None });
+		syn::Path {
+			leading_colon: Some(syn::token::Colon2::default()),
+			segments,
+		}
 	};
 	
 	let partial_data_fields = db_model_macro::get_partial_data_fields(&crate_name, &db_model.columns_except_pk, &db_model.relations)?;
@@ -43,8 +56,6 @@ fn db_model_macro(input: &syn::DeriveInput) -> Result<proc_macro2::TokenStream> 
 	let prepare_delete = db_model_macro::get_prepare_delete(&crate_name, &db_model)?;
 	
 	let get_by_pk_sql = format!("SELECT {{}} FROM {{}} {{}} WHERE {}=?", pk_db_string);
-	
-	let crate_name = quote! { ::#crate_name };
 	
 	let sql_names = [pk_db_string.clone()].into_iter().chain(db_model.columns_except_pk.iter().map(|f| {
 		let default_column_name = f.rs_name_ident;
