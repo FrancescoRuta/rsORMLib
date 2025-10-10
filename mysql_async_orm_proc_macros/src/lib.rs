@@ -25,10 +25,10 @@ fn db_model_macro(input: &syn::DeriveInput) -> Result<proc_macro2::TokenStream> 
 	let pk_name_ident = db_model.pk.rs_name_ident;
 	let pk_db_string = format!("{}.{}", db_model.from.table, db_model.pk.db_name);
 	
-	let crate_name: syn::Path = if let Some(this_crate_path) = struct_attributes.get("this_crate_path") {
-		syn::parse(this_crate_path.tokens.clone().into())?
+	let crate_name = if let Some(mysql_async_orm_crate_path) = struct_attributes.get("mysql_async_orm_crate_path") {
+		syn::parse(mysql_async_orm_crate_path.tokens.clone().into())?
 	} else {
-		syn::Ident::new(CRATE_NAME, proc_macro2::Span::call_site()).into()
+		syn::Path::from(syn::Ident::new(CRATE_NAME, proc_macro2::Span::call_site()))
 	};
 	
 	let partial_data_fields = db_model_macro::get_partial_data_fields(&crate_name, &db_model.columns_except_pk, &db_model.relations)?;
@@ -330,7 +330,7 @@ fn db_model_macro(input: &syn::DeriveInput) -> Result<proc_macro2::TokenStream> 
 	Ok(res)
 }
 
-#[proc_macro_derive(DbModel, attributes(from, pk, relation, readonly, this_crate_path))]
+#[proc_macro_derive(DbModel, attributes(from, pk, relation, readonly, mysql_async_orm_crate_path))]
 pub fn db_model(input: proc_macro::TokenStream) -> proc_macro::TokenStream {
 	let input = syn::parse_macro_input!(input as syn::DeriveInput);
 	db_model_macro(&input).unwrap_or_else(syn::Error::into_compile_error).into()
