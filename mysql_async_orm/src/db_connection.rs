@@ -7,14 +7,14 @@ use mysql_async::{
 
 #[derive(Clone)]
 pub struct DbConnectionPool {
-	pool: mysql_async::Pool,
+	pub pool: mysql_async::Pool,
 }
 
 pub struct DbConnection {
-	conn: mysql_async::Conn,
+	pub conn: mysql_async::Conn,
 }
 pub struct DbTransaction<'a> {
-	conn: mysql_async::Transaction<'a>,
+	pub conn: mysql_async::Transaction<'a>,
 }
 
 pub type DbError = mysql_async::Error;
