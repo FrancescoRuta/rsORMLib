@@ -1,8 +1,6 @@
 use std::{collections::HashMap, borrow::Borrow};
 use quote::quote;
-use syn::Result;
-
-use crate::CRATE_NAME;
+use syn::{Ident, Result};
 
 use self::into_db_model::{DbColumn, DbRelation};
 
@@ -31,8 +29,7 @@ pub fn get_attributes<A: Borrow<syn::Attribute>>(attrs: impl Iterator<Item = A>)
 	result
 }
 
-pub fn get_partial_data_fields(columns_except_pk: &Vec<DbColumn<'_>>, relations: &Vec<DbRelation<'_>>) -> Result<Vec<proc_macro2::TokenStream>> {
-	let crate_name = syn::Ident::new(CRATE_NAME, proc_macro2::Span::call_site());
+pub fn get_partial_data_fields(crate_name: &syn::Path, columns_except_pk: &Vec<DbColumn<'_>>, relations: &Vec<DbRelation<'_>>) -> Result<Vec<proc_macro2::TokenStream>> {
 	Ok(columns_except_pk.iter().map(|f| {
 		let f_name = &f.rs_name_ident;
 		let f_type = f.rs_type;
@@ -46,8 +43,7 @@ pub fn get_partial_data_fields(columns_except_pk: &Vec<DbColumn<'_>>, relations:
 	).collect())
 }
 
-pub fn get_partial_data_init_collectors(relations: &Vec<DbRelation<'_>>) -> Result<Vec<proc_macro2::TokenStream>> {
-	let crate_name = syn::Ident::new(CRATE_NAME, proc_macro2::Span::call_site());
+pub fn get_partial_data_init_collectors(crate_name: &syn::Path, relations: &Vec<DbRelation<'_>>) -> Result<Vec<proc_macro2::TokenStream>> {
 	Ok(relations.iter().map(|r| {
 		let f_name = r.rs_name_ident;
 		let f_type = &r.ty;
@@ -105,8 +101,7 @@ pub fn get_push_next_sub(relations: &Vec<DbRelation<'_>>) -> Result<Vec<proc_mac
 	}).collect())
 }
 
-pub fn get_prepare_insert(db_model: &into_db_model::DbModel) -> Result<proc_macro2::TokenStream> {
-	let crate_name = syn::Ident::new(CRATE_NAME, proc_macro2::Span::call_site());
+pub fn get_prepare_insert(crate_name: &syn::Path, db_model: &into_db_model::DbModel) -> Result<proc_macro2::TokenStream> {
 	let columns_except_pk = db_model.columns_except_pk.iter().filter(|c| !c.readonly).collect::<Vec<_>>();
 	let insert_col_list = columns_except_pk.iter().map(|c| &c.db_name as &str).collect::<Vec<&str>>().join(",");
 	let insert_str_with_fk = format!("INSERT INTO {} ({{}},{}) VALUES (@id_{{}}", db_model.from.table, insert_col_list);
@@ -156,8 +151,7 @@ pub fn get_prepare_insert(db_model: &into_db_model::DbModel) -> Result<proc_macr
 	})
 }
 
-pub fn get_prepare_delete(db_model: &into_db_model::DbModel) -> Result<proc_macro2::TokenStream> {
-	let crate_name = syn::Ident::new(CRATE_NAME, proc_macro2::Span::call_site());
+pub fn get_prepare_delete(crate_name: &syn::Path, db_model: &into_db_model::DbModel) -> Result<proc_macro2::TokenStream> {
 	let delete_str_with_fk = format!("DELETE FROM {} WHERE {{}}=@id_{{}} AND {}=@id_{{}};", db_model.from.table, db_model.pk.db_name);
 	let delete_str_without_fk = format!("DELETE FROM {} WHERE {}=@id_{{}};", db_model.from.table, db_model.pk.db_name);
 	let pk_rs_name = db_model.pk.rs_name_ident;
@@ -186,8 +180,7 @@ pub fn get_prepare_delete(db_model: &into_db_model::DbModel) -> Result<proc_macr
 }
 
 
-pub fn get_prepare_update(db_model: &into_db_model::DbModel) -> Result<proc_macro2::TokenStream> {
-	let crate_name = syn::Ident::new(CRATE_NAME, proc_macro2::Span::call_site());
+pub fn get_prepare_update(crate_name: &syn::Path, db_model: &into_db_model::DbModel) -> Result<proc_macro2::TokenStream> {
 	let columns_except_pk = db_model.columns_except_pk.iter().filter(|c| !c.readonly).collect::<Vec<_>>();
 	let update_str_prefix = format!("UPDATE {} SET ", db_model.from.table);
 	let update_str_with_fk_suffix = format!(" WHERE {{}}=@id_{{}} AND {}=@id_{{}};", db_model.pk.db_name);

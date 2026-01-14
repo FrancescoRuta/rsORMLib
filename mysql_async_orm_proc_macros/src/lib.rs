@@ -7,6 +7,21 @@ mod db_model_macro;
 const CRATE_NAME: &'static str = "mysql_async_orm";
 
 
+#[derive(Clone)]
+struct CrateNameAttribute {
+	pub value: String,
+}
+impl syn::parse::Parse for CrateNameAttribute {
+	fn parse(input: syn::parse::ParseStream) -> syn::Result<Self> {
+		let content;
+		let _ = syn::parenthesized!(content in input);
+		let input: syn::LitStr = (&content).parse()?;
+		Ok(CrateNameAttribute {
+			value: input.value(),
+		})
+	}
+}
+
 fn generate_unique_ident(prefix: &str) -> syn::Ident {
     let uuid = uuid::Uuid::new_v4();
     let ident = format!("{}_{}", prefix, uuid).replace('-', "_");
@@ -14,8 +29,6 @@ fn generate_unique_ident(prefix: &str) -> syn::Ident {
 }
 
 fn db_model_macro(input: &syn::DeriveInput) -> Result<proc_macro2::TokenStream> {
-	let crate_name = syn::Ident::new(CRATE_NAME, proc_macro2::Span::call_site());
-	let crate_name = quote! { ::#crate_name };
 	let name = &input.ident;
 	let fields = db_model_macro::get_struct_fields(input)?;
 	let struct_attributes = db_model_macro::get_attributes(input.attrs.iter());
@@ -26,16 +39,36 @@ fn db_model_macro(input: &syn::DeriveInput) -> Result<proc_macro2::TokenStream> 
 	let pk_inner_type = db_model_macro::into_db_model::get_inner_type(pk_type)?;
 	let pk_name_ident = db_model.pk.rs_name_ident;
 	let pk_db_string = format!("{}.{}", db_model.from.table, db_model.pk.db_name);
-	let partial_data_fields = db_model_macro::get_partial_data_fields(&db_model.columns_except_pk, &db_model.relations)?;
-	let partial_data_init_collectors = db_model_macro::get_partial_data_init_collectors(&db_model.relations)?;
+	
+	let crate_name = if let Some(mysql_async_orm_crate_path) = struct_attributes.get("mysql_async_orm_crate_path") {
+		let crate_name: CrateNameAttribute = syn::parse(mysql_async_orm_crate_path.tokens.clone().into())?;
+		let mut segments = syn::punctuated::Punctuated::<syn::PathSegment, syn::token::Colon2>::new();
+		for p in crate_name.value.split("::") {
+			segments.push(syn::PathSegment { ident: syn::Ident::new(p, proc_macro2::Span::call_site()), arguments: syn::PathArguments::None });
+		}
+		syn::Path {
+			leading_colon: Some(syn::token::Colon2::default()),
+			segments,
+		}
+	} else {
+		let mut segments = syn::punctuated::Punctuated::<syn::PathSegment, syn::token::Colon2>::new();
+		segments.push(syn::PathSegment { ident: syn::Ident::new(CRATE_NAME, proc_macro2::Span::call_site()), arguments: syn::PathArguments::None });
+		syn::Path {
+			leading_colon: Some(syn::token::Colon2::default()),
+			segments,
+		}
+	};
+	
+	let partial_data_fields = db_model_macro::get_partial_data_fields(&crate_name, &db_model.columns_except_pk, &db_model.relations)?;
+	let partial_data_init_collectors = db_model_macro::get_partial_data_init_collectors(&crate_name, &db_model.relations)?;
 	let partial_data_init = db_model_macro::get_partial_data_init(&db_model.columns_except_pk, &db_model.relations)?;
 	let partial_data_destruct = db_model_macro::get_partial_data_destruct(&db_model.columns_except_pk, &db_model.relations)?;
 	let partial_data_build = db_model_macro::get_partial_data_build(&db_model.columns_except_pk, &db_model.relations)?;
 	let push_next_sub = db_model_macro::get_push_next_sub(&db_model.relations)?;
 	let mod_name = generate_unique_ident("__db_rel");
-	let prepare_insert = db_model_macro::get_prepare_insert(&db_model)?;
-	let prepare_update = db_model_macro::get_prepare_update(&db_model)?;
-	let prepare_delete = db_model_macro::get_prepare_delete(&db_model)?;
+	let prepare_insert = db_model_macro::get_prepare_insert(&crate_name, &db_model)?;
+	let prepare_update = db_model_macro::get_prepare_update(&crate_name, &db_model)?;
+	let prepare_delete = db_model_macro::get_prepare_delete(&crate_name, &db_model)?;
 	
 	let get_by_pk_sql = format!("SELECT {{}} FROM {{}} {{}} WHERE {}=?", pk_db_string);
 	
@@ -323,7 +356,7 @@ fn db_model_macro(input: &syn::DeriveInput) -> Result<proc_macro2::TokenStream> 
 	Ok(res)
 }
 
-#[proc_macro_derive(DbModel, attributes(from, pk, relation, readonly))]
+#[proc_macro_derive(DbModel, attributes(from, pk, relation, readonly, mysql_async_orm_crate_path))]
 pub fn db_model(input: proc_macro::TokenStream) -> proc_macro::TokenStream {
 	let input = syn::parse_macro_input!(input as syn::DeriveInput);
 	db_model_macro(&input).unwrap_or_else(syn::Error::into_compile_error).into()
